@@ -82,9 +82,15 @@ disassembleInstruction(Chunk *chunk, int offset)
 
     switch(instruction)
     {
-        case OP_RETURN:         { result = simpleInstruction("OP_RETURN", offset); }              break;
+        case OP_RETURN:         { result = simpleInstruction("OP_RETURN", offset); }                     break;
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;
+        case OP_NEGATE:         { result = simpleInstruction("OP_NEGATE", offset); }                     break;
+
+        case OP_ADD:            { result = simpleInstruction("OP_ADD", offset); }                        break;
+        case OP_SUBTRACT:       { result = simpleInstruction("OP_SUBTRACT", offset); }                   break;
+        case OP_MULTIPLY:       { result = simpleInstruction("OP_MULTIPLY", offset); }                   break;
+        case OP_DIVIDE:         { result = simpleInstruction("OP_DIVIDE", offset); }                     break;
 
         default:
         {

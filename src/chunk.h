@@ -12,6 +12,12 @@ typedef enum
     /// @brief The next byte after this opcode stores the index into which the constant was stored in the constant
     /// pool.
     OP_CONSTANT,
+    OP_ADD,
+    OP_SUBTRACT,
+    OP_MULTIPLY,
+    OP_DIVIDE,
+    /// @brief Unary operator for negative integers.
+    OP_NEGATE,
     /// @brief This op code means return from a function.
     OP_RETURN,
 } OpCode;
