@@ -137,7 +137,8 @@
         "matrixfunctions": "cpp",
         "coroutine": "cpp",
         "resumable": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "chunk.h": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",
@@ -166,5 +167,5 @@
     "zenMode.hideActivityBar": true,
     "zenMode.showTabs": "single",
     "zenMode.hideStatusBar": true,
-    "zenMode.restore": true
+    "zenMode.restore": true,
 }

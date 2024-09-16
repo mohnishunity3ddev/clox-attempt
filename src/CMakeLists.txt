@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.22.0)
 
 project(clox)
 
-include(../cmake_macros/prac.cmake)
+file(GLOB_RECURSE SRC_FILES 	LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.c)
+file(GLOB_RECURSE HEADER_FILES 	LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h)
 
-SETUP_APP(clox "clox")
+add_executable(${PROJECT_NAME} ${SRC_FILES} ${HEADER_FILES})
