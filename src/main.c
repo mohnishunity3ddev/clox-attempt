@@ -1,95 +1,79 @@
-#include <stdio.h>
-// #include <test_class/test.h>
 #include "common.h"
 #include "chunk.h"
 #include "debug.h"
 #include "vm.h"
 
-// -((1.2 + 3.4) / 5.6) = -(4.6 / 5.6)
-void arith01_test(Chunk *chunk)
+#define DO_TESTS
+#ifdef DO_TESTS
+#include "tests/test.h"
+#endif
+
+static void
+repl()
 {
-    writeConstant(chunk, 1.2, 123);
-    writeConstant(chunk, 3.4, 123);
-    writeChunk(chunk, OP_ADD, 123);
+    char line[1024];
 
-    writeConstant(chunk, 5.6, 123);
-    writeChunk(chunk, OP_DIVIDE, 123);
-    writeChunk(chunk, OP_NEGATE, 123);
+    for (;;) {
+        printf("> ");
+        // read a line of text max characters 1024 until a '\n' is encountered.
+        if (!fgets(line, sizeof(line), stdin)) {
+            printf("\n");
+            break;
+        }
 
-    writeChunk(chunk, OP_RETURN, 123);
+        interpret(line);
+    }
 }
 
-// (1 * 2) + 3 = 5
-void arith02_test(Chunk *chunk)
+static char *
+readFile(const char *path)
 {
-    writeConstant(chunk, 1, 123);
-    writeConstant(chunk, 2, 123);
-    writeChunk(chunk, OP_MULTIPLY, 123);
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) {
+        fprintf(stderr, "Could not open the file \"%s\".\n", path);
+        exit(74);
+    }
 
-    writeConstant(chunk, 3, 123);
-    writeChunk(chunk, OP_ADD, 123);
-    writeChunk(chunk, OP_RETURN, 123);
+    fseek(fp, 0L, SEEK_END);
+    size_t fileSize = ftell(fp);
+    rewind(fp);
+
+    char *buffer = (char *)malloc(fileSize + 1);
+    size_t bytesRead = fread(buffer, fileSize, 1, fp);
+    if (bytesRead < fileSize) {
+        fprintf(stderr, "Could not open the file \"%s\".\n", path);
+        exit(74);
+    }
+    buffer[bytesRead] = '\0';
+
+    fclose(fp);
+    return buffer;
 }
 
-// 1 + 2 * 3 = 1 + (2 * 3) = 1 + 6 = 7
-void arith03_test(Chunk *chunk)
+static void
+runFile(const char *path)
 {
-    writeConstant(chunk, 2, 123);
-    writeConstant(chunk, 3, 123);
-    writeChunk(chunk, OP_MULTIPLY, 123);
+    char *source = readFile(path);
+    InterpretResult result = interpret(source);
+    free(source);
 
-    writeConstant(chunk, 1, 123);
-    writeChunk(chunk, OP_ADD, 123);
-    writeChunk(chunk, OP_RETURN, 123);
+    if (result == INTERPRET_COMPILE_ERROR) exit(65);
+    if (result == INTERPRET_RUNTIME_ERROR) exit(70);
 }
-
-// 3 - 2 - 1 = 0
-void arith04_test(Chunk *chunk)
-{
-    writeConstant(chunk, 3, 123);
-    writeConstant(chunk, 2, 123);
-    writeChunk(chunk, OP_SUBTRACT, 123);
-
-    writeConstant(chunk, 1, 123);
-    writeChunk(chunk, OP_SUBTRACT, 123);
-    writeChunk(chunk, OP_RETURN, 123);
-}
-
-// 1. + 2. * 3. - 4. / -5. = (1. + (2. * 3.)) - (4. / -5.);
-void arith05_test(Chunk *chunk)
-{
-    writeConstant(chunk, 1, 123);
-    writeConstant(chunk, 2, 123);
-    writeConstant(chunk, 3, 123);
-    writeChunk(chunk, OP_MULTIPLY, 123);
-    writeChunk(chunk, OP_ADD, 123);
-
-    writeConstant(chunk, 4, 123);
-    writeConstant(chunk, 5, 123);
-    writeChunk(chunk, OP_NEGATE, 123);
-    writeChunk(chunk, OP_DIVIDE, 123);
-
-    writeChunk(chunk, OP_SUBTRACT, 123);
-    writeChunk(chunk, OP_RETURN, 123);
-}
-
 
 int main(int argc, const char **argv)
 {
     initVM();
 
-    Chunk chunk;
-    initChunk(&chunk);
+    if (argc == 1) {
+        repl();
+    } else if (argc == 2) {
+        runFile(argv[1]);
+    } else {
+        fprintf(stderr, "Usage: clox [path]\n");
+        exit(64);
+    }
 
-    // arith01_test(&chunk);
-    // arith02_test(&chunk);
-    // arith03_test(&chunk);
-    // arith04_test(&chunk);
-    arith05_test(&chunk);
-
-    disassembleChunk(&chunk, "test chunk");
-    interpret(&chunk);
     freeVM();
-    freeChunk(&chunk);
     return 0;
 }

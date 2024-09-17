@@ -138,7 +138,9 @@
         "coroutine": "cpp",
         "resumable": "cpp",
         "typeindex": "cpp",
-        "chunk.h": "c"
+        "chunk.h": "c",
+        "common.h": "c",
+        "scanner.h": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",

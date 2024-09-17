@@ -1,6 +1,7 @@
 #include "common.h"
 #include "vm.h"
 #include <stdio.h>
+#include "compiler.h"
 #include "debug.h"
 #include "memory.h"
 
@@ -11,21 +12,6 @@ resetStack()
 {
     vm.stack.top = vm.stack.values;
     vm.stack.count = 0;
-}
-
-void
-initStack(Stack *stack)
-{
-    stack->values = NULL;
-    stack->capacity = 0;
-    stack->count = 0;
-}
-
-void
-freeStack(Stack *stack)
-{
-    FREE_ARRAY(Value, stack->values, stack->capacity);
-    initStack(stack);
 }
 
 static InterpretResult
@@ -86,15 +72,27 @@ run()
 
 void initVM() { resetStack(); }
 
-InterpretResult interpret(Chunk *chunk)
+InterpretResult
+interpret(Chunk *chunk)
 {
     vm.chunk = chunk;
     vm.ip = vm.chunk->code;
     return run();
 }
 
+InterpretResult
+interpret(const char *source)
+{
+    compile(source);
+    return INTERPRET_OK;
+}
+
 void freeVM()
 {
+    FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);
+    vm.stack.values = NULL;
+    vm.stack.capacity = 0;
+    vm.stack.count = 0;
 }
 
 void
