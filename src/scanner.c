@@ -52,7 +52,7 @@ isAtEnd()
 static char
 advance()
 {
-    return scanner.current++;
+    return *scanner.current++;
 }
 
 static bool
@@ -247,7 +247,6 @@ scanToken()
 
     if (isAlpha(c)) return identifier();
     if (isDigit(c)) return number();
-
     switch (c)
     {
         case '(': return makeToken(TOKEN_LEFT_PAREN);

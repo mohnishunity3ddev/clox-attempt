@@ -140,7 +140,9 @@
         "typeindex": "cpp",
         "chunk.h": "c",
         "common.h": "c",
-        "scanner.h": "c"
+        "scanner.h": "c",
+        "test.h": "c",
+        "compiler.h": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",

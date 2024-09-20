@@ -78,7 +78,16 @@ writeChunk(Chunk *chunk, u8 byte, int line)
     chunk->count++;
 }
 
-void
+int
+addConstant(Chunk *chunk, Value value)
+{
+    writeValueArray(&chunk->constants, value);
+
+    int index = chunk->constants.count - 1;
+    return index;
+}
+
+int
 writeConstant(Chunk *chunk, Value value, int line)
 {
     writeValueArray(&chunk->constants, value);
@@ -98,4 +107,5 @@ writeConstant(Chunk *chunk, Value value, int line)
         writeChunk(chunk, index & 0xff, -1); // Low 8 bits.
     }
 
+    return index;
 }

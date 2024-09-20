@@ -25,7 +25,7 @@ run()
         double b = pop();                                                                                         \
         setTop(peek() op b);                                                                                      \
     } while (false)
-
+    
     for (;;)
     {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -73,18 +73,22 @@ run()
 void initVM() { resetStack(); }
 
 InterpretResult
-interpret(Chunk *chunk)
-{
-    vm.chunk = chunk;
-    vm.ip = vm.chunk->code;
-    return run();
-}
-
-InterpretResult
 interpret(const char *source)
 {
-    compile(source);
-    return INTERPRET_OK;
+    Chunk chunk;
+    initChunk(&chunk);
+
+    if (!compile(source, &chunk)) {
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+
+    vm.chunk = &chunk;
+    vm.ip = vm.chunk->code;
+    InterpretResult result = run();
+
+    freeChunk(&chunk);
+    return result;
 }
 
 void freeVM()

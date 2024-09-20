@@ -58,6 +58,8 @@ void writeChunk(Chunk *chunk, u8 byte, int line);
 /// @param chunk The chunk which has the constants pool
 /// @param value The value to add.
 /// @param line The line number where we saw the constant in the code
-void writeConstant(Chunk *chunk, Value value, int line);
+/// @return returns the index in the constant pool where the constant has been stored.
+int addConstant(Chunk *chunk, Value value);
+int writeConstant(Chunk *chunk, Value value, int line);
 
 #endif

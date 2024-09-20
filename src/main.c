@@ -2,6 +2,8 @@
 #include "chunk.h"
 #include "debug.h"
 #include "vm.h"
+#include <string.h>
+#include <errno.h>
 
 #define DO_TESTS
 #ifdef DO_TESTS
@@ -21,6 +23,10 @@ repl()
             break;
         }
 
+        if (strcmp(line, "exit") == 0) {
+            break;
+        }
+
         interpret(line);
     }
 }
@@ -30,7 +36,8 @@ readFile(const char *path)
 {
     FILE *fp = fopen(path, "rb");
     if (fp == NULL) {
-        fprintf(stderr, "Could not open the file \"%s\".\n", path);
+        const char *errMsg = strerror(errno);
+        fprintf(stderr, "Could not open the file \"%s\". Error: %s\n", path, errMsg);
         exit(74);
     }
 
@@ -39,7 +46,7 @@ readFile(const char *path)
     rewind(fp);
 
     char *buffer = (char *)malloc(fileSize + 1);
-    size_t bytesRead = fread(buffer, fileSize, 1, fp);
+    size_t bytesRead = fread(buffer, sizeof(char), fileSize, fp);
     if (bytesRead < fileSize) {
         fprintf(stderr, "Could not open the file \"%s\".\n", path);
         exit(74);
