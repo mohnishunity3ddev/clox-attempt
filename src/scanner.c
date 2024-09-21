@@ -89,6 +89,10 @@ skipWhitespaces()
         {
             case ' ' :
             case '\r':
+            case '\t':
+            {
+                advance();
+            } break;
             case '\n': {
                 scanner.line++; // next line.
                 advance();

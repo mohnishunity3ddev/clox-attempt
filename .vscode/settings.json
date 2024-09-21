@@ -166,6 +166,12 @@
         "titleBar.inactiveForeground": "#e7e7e799",
         "editor.lineHighlightBorder": "#D0FEEC00"
     },
+    "editor.lineNumbers": "off",
+    "workbench.editor.showTabs": "none",
+    "workbench.statusBar.visible": false,
+    "breadcrumbs.enabled": false,
+    "window.title": "${activeEditorShort}",
+
     "peacock.color": "#343434",
     "zenMode.fullScreen": true,
     "zenMode.hideActivityBar": true,

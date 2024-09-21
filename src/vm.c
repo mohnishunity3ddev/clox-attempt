@@ -1,11 +1,19 @@
+#include <stdarg.h>
+#include <stdio.h>
+
 #include "common.h"
 #include "vm.h"
-#include <stdio.h>
 #include "compiler.h"
 #include "debug.h"
 #include "memory.h"
 
 VM vm;
+
+static bool
+isFalsey(Value value)
+{
+    return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
 
 static void
 resetStack()
@@ -14,18 +22,47 @@ resetStack()
     vm.stack.count = 0;
 }
 
+static void
+runtimeError(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\n", stderr);
+
+    size_t offset = vm.ip - vm.chunk->code - 1;
+    int line = getLine(vm.chunk, offset);
+    fprintf(stderr, "[line %d] in script\n", line);
+    resetStack();
+}
+
 static InterpretResult
 run()
 {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
-#define BINARY_OP(op)                                                                                             \
+#define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
     {                                                                                                             \
-        double b = pop();                                                                                         \
-        setTop(peek() op b);                                                                                      \
+        if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1)))                                                           \
+        {                                                                                                         \
+            runtimeError("Operands must be numbers.");                                                            \
+            return INTERPRET_RUNTIME_ERROR;                                                                       \
+        }                                                                                                         \
+        double b = AS_NUMBER(pop());                                                                              \
+        Value opResult = valueType(AS_NUMBER(peek(0)) op b);                                                      \
+        setTop(opResult);                                                                                         \
     } while (false)
-    
+#define BINARY_OP_FUNC(func)                                                                                      \
+    do                                                                                                            \
+    {                                                                                                             \
+        Value b = pop();                                                                                          \
+        Value a = peek(0);                                                                                        \
+        Value res = BOOL_VAL(func(a, b));                                                                         \
+        setTop(res);                                                                                              \
+    } while (false)
+
     for (;;)
     {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -50,12 +87,40 @@ run()
                 push(constant);
             } break;
 
-            case OP_ADD:        { BINARY_OP(+); } break;
-            case OP_SUBTRACT:   { BINARY_OP(-); } break;
-            case OP_MULTIPLY:   { BINARY_OP(*); } break;
-            case OP_DIVIDE:     { BINARY_OP(/); } break;
+            case OP_NIL:        { push(NIL_VAL);            } break;
+            case OP_TRUE:       { push(BOOL_VAL(true));     } break;
+            case OP_FALSE:      { push(BOOL_VAL(false));    } break;
 
-            case OP_NEGATE:     { setTop(-peek()); } break;
+            case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual); }    break;
+            case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual); }   break;
+            case OP_GREATER:        { BINARY_OP_FUNC(valuesGreater); }  break;
+            case OP_GREATER_EQUAL:  { BINARY_OP_FUNC(!valuesLess); }    break;
+            case OP_LESS:           { BINARY_OP_FUNC(valuesLess); }     break;
+            case OP_LESS_EQUAL:     { BINARY_OP_FUNC(!valuesGreater); } break;
+
+            case OP_ADD:        { BINARY_OP(NUMBER_VAL, +); } break;
+            case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
+            case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
+            case OP_DIVIDE:     { BINARY_OP(NUMBER_VAL, /); } break;
+
+            case OP_NOT:
+            {
+                Value p = peek(0);
+                Value t = BOOL_VAL(isFalsey(p));
+                setTop(t);
+            } break;
+
+            case OP_NEGATE:
+            {
+                // if the value at the top of the stack is not an actual number, then we generate a runtime error.
+                if (!IS_NUMBER(peek(0))) {
+                    runtimeError("Operand must be a number!");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                double number = AS_NUMBER(peek(0));
+                setTop(NUMBER_VAL(-number));
+            } break;
 
             case OP_RETURN:
             {
@@ -68,6 +133,7 @@ run()
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP
+#undef BINARY_OP_FUNC
 }
 
 void initVM() { resetStack(); }
@@ -125,10 +191,12 @@ pop()
 }
 
 Value
-peek()
+peek(int indexFromLast)
 {
-    _assert(vm.stack.count > 0);
-    return *(vm.stack.top - 1);
+    _assert(indexFromLast >= 0 &&
+            vm.stack.count > 0 &&
+            vm.stack.count >= (indexFromLast + 1));
+    return *((vm.stack.top - 1) - indexFromLast);
 }
 
 void

@@ -39,7 +39,7 @@ InterpretResult interpret(const char *source);
 
 void push(Value value);
 Value pop();
-Value peek();
+Value peek(int indexFromLast);
 void setTop(Value value);
 
 #endif

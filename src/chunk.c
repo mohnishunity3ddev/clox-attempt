@@ -11,12 +11,12 @@ initLinesArray(LineArray *lines)
 }
 
 void
-writeLineArray(LineArray *lineArray, int value)
+writeLineArray(LineArray *lineArray, int lineNumber)
 {
-    if (value != -1)
+    if (lineNumber != -1)
     {
         if (lineArray->count > 0 &&
-            lineArray->values[lineArray->count - 1].line == value)
+            lineArray->values[lineArray->count - 1].line == lineNumber)
         {
             ++lineArray->values[lineArray->count-1].repetition;
         }
@@ -30,11 +30,47 @@ writeLineArray(LineArray *lineArray, int value)
             }
 
             lineArray->values[lineArray->count].repetition = 1;
-            lineArray->values[lineArray->count].line = value;
+            lineArray->values[lineArray->count].line = lineNumber;
             lineArray->count++;
         }
 
     }
+}
+
+int
+getLine(Chunk *chunk, size_t offset)
+{
+    u8 *p = chunk->code;
+    u8 *end = chunk->code + offset;
+    int instructionCount = 0;
+    while (p < end) {
+        u8 instruction = *p;
+
+        if (instruction == OP_CONSTANT) {
+            p += 2;
+        } else if (instruction == OP_CONSTANT_LONG) {
+            p += 4;
+        } else {
+            ++p;
+        }
+
+        ++instructionCount;
+    }
+
+    int lineInfoIndex = 0;
+    int result = -1;
+    while(instructionCount > 0) {
+        int repetitionCount = chunk->lines.values[lineInfoIndex].repetition;
+        if (repetitionCount >= instructionCount) {
+            result = chunk->lines.values[lineInfoIndex].line;
+            break;
+        } else {
+            instructionCount -= repetitionCount;
+            ++lineInfoIndex;
+        }
+    }
+
+    return result;
 }
 
 void
@@ -103,8 +139,8 @@ writeConstant(Chunk *chunk, Value value, int line)
         // 3 bytes to store index of this constant
         writeChunk(chunk, OP_CONSTANT_LONG, line);
         writeChunk(chunk, (index >> 16) & 0xff, -1); // High 8 bits.
-        writeChunk(chunk, (index >> 8) & 0xff, -1); // Middle 8 bits.
-        writeChunk(chunk, index & 0xff, -1); // Low 8 bits.
+        writeChunk(chunk, (index >> 8)  & 0xff, -1); // Middle 8 bits.
+        writeChunk(chunk, index & 0xff, -1);         // Low 8 bits.
     }
 
     return index;

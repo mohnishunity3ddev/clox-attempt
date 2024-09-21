@@ -12,10 +12,22 @@ typedef enum
     /// @brief The next byte after this opcode stores the index into which the constant was stored in the constant
     /// pool.
     OP_CONSTANT,
+    OP_NIL,
+    OP_TRUE,
+    OP_FALSE,
+
+    OP_EQUAL,
+    OP_NOT_EQUAL,
+    OP_GREATER,
+    OP_GREATER_EQUAL,
+    OP_LESS,
+    OP_LESS_EQUAL,
+
     OP_ADD,
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
+    OP_NOT,
     /// @brief Unary operator for negative integers.
     OP_NEGATE,
     /// @brief This op code means return from a function.
@@ -61,5 +73,11 @@ void writeChunk(Chunk *chunk, u8 byte, int line);
 /// @return returns the index in the constant pool where the constant has been stored.
 int addConstant(Chunk *chunk, Value value);
 int writeConstant(Chunk *chunk, Value value, int line);
+
+/// @brief returns the line number for an instruction at the given offset inside the chunk's code.
+/// @param chunk Code chunk
+/// @param offset offset into the chunk's code where the instruction is at.
+/// @return returns the line number for the given instruction inside the given chunk.
+int getLine(Chunk *chunk, size_t offset);
 
 #endif
