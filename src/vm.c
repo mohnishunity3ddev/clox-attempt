@@ -23,13 +23,7 @@ concatenate()
     ObjString *b = AS_STRING(pop());
     ObjString *a = AS_STRING(peek(0));
 
-    int length = a->length + b->length;
-    char *chars = ALLOCATE(char, length + 1);
-    memcpy(chars, a->chars, a->length);
-    memcpy(chars + a->length, b->chars, b->length);
-    chars[length] = '\0';
-
-    ObjString *result = takeString(chars, length);
+    ObjString *result = makeStringConcat(a, b);
     setTop(OBJ_VAL((Obj *)result));
 }
 
@@ -127,6 +121,34 @@ run()
                     setTop(res);
                 } else if (IS_STRING(bVal) && IS_STRING(aVal)) {
                     concatenate();
+                } else if (!IS_STRING(aVal) && IS_STRING(bVal)) {
+                    ObjString *b = AS_STRING(pop());
+                    Obj *strObject = NULL;
+                    if (IS_NUMBER(aVal)) {
+                        double a = AS_NUMBER(peek(0));
+                        strObject = (Obj *)makeStringFormat("%g%s", a, b->chars);
+                    } else if (IS_BOOL(aVal)) {
+                        bool a = AS_BOOL(aVal);
+                        const char *aStr = a ? "True" : "False";
+                        strObject = (Obj *)makeStringFormat("%s%s", aStr, b->chars);
+                    } else {
+                        _assert(!"Should not be here!");
+                    }
+                    setTop(OBJ_VAL(strObject));
+                } else if (IS_STRING(aVal) && !IS_STRING(bVal)) {
+                    if (IS_NUMBER(bVal)) {
+                        double b = AS_NUMBER(pop());
+                        ObjString *a = AS_STRING(peek(0));
+                        Obj *strObject = (Obj *)makeStringFormat("%s%g", a->chars, b);
+                        setTop(OBJ_VAL(strObject));
+                    } else if (IS_BOOL(bVal)) {
+                        bool b = AS_BOOL(pop());
+                        ObjString *a = AS_STRING(peek(0));
+                        Obj *strObject = (Obj *)makeStringFormat("%s%s", a->chars, b ? "True" : "False");
+                        setTop(OBJ_VAL(strObject));
+                    } else {
+                        _assert(!"Should not be here!");
+                    }
                 } else {
                     runtimeError("Operands must be two numbers or two strings.");
                     return INTERPRET_RUNTIME_ERROR;

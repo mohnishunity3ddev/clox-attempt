@@ -340,9 +340,11 @@ literal()
     }
 }
 
-static void string()
+static void
+string()
 {
-    ObjString *string = copyString(parser.previous.start + 1, parser.previous.length - 2);
+    // ObjString *string = copyString(parser.previous.start + 1, parser.previous.length - 2);
+    ObjString *string = makeString(parser.previous.start + 1, parser.previous.length - 2, true);
     Value stringValue = OBJ_VAL((Obj *)string);
     emitConstant(stringValue);
 }

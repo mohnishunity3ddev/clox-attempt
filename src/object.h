@@ -27,6 +27,7 @@ struct ObjString
     Obj obj;
     int length;
     char *chars;
+    bool ownsString;
 };
 
 static inline bool
@@ -38,6 +39,10 @@ isObjType(Value value, ObjType type)
 
 ObjString *takeString(char *chars, int length);
 ObjString *copyString(const char *chars, int length);
+ObjString *makeString(const char *chars, int length, bool ownsString);
+ObjString *makeStringFormat(const char *format, ...);
+ObjString *makeStringConcat(ObjString *a, ObjString *b);
+
 void printObject(Value value);
 
 #endif
