@@ -18,12 +18,11 @@ typedef struct
 {
     /// @brief The chunk which the VM is currently processing.
     Chunk *chunk;
-
     /// @brief Instruction Pointer - cursor position of the vm telling where it is inside the chunk.
     ///        points to the instruction about to be executed.
     u8 *ip;
-
     Stack stack;
+    Obj *objects;
 } VM;
 
 typedef enum
@@ -32,6 +31,8 @@ typedef enum
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR
 } InterpretResult;
+
+extern VM vm;
 
 void initVM();
 void freeVM();

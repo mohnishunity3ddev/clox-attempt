@@ -1,11 +1,13 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "common.h"
-#include "vm.h"
 #include "compiler.h"
 #include "debug.h"
+#include "object.h"
 #include "memory.h"
+#include "vm.h"
 
 VM vm;
 
@@ -13,6 +15,22 @@ static bool
 isFalsey(Value value)
 {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+static void
+concatenate()
+{
+    ObjString *b = AS_STRING(pop());
+    ObjString *a = AS_STRING(peek(0));
+
+    int length = a->length + b->length;
+    char *chars = ALLOCATE(char, length + 1);
+    memcpy(chars, a->chars, a->length);
+    memcpy(chars + a->length, b->chars, b->length);
+    chars[length] = '\0';
+
+    ObjString *result = takeString(chars, length);
+    setTop(OBJ_VAL((Obj *)result));
 }
 
 static void
@@ -98,7 +116,23 @@ run()
             case OP_LESS:           { BINARY_OP_FUNC(valuesLess); }     break;
             case OP_LESS_EQUAL:     { BINARY_OP_FUNC(!valuesGreater); } break;
 
-            case OP_ADD:        { BINARY_OP(NUMBER_VAL, +); } break;
+            case OP_ADD:
+            {
+                Value bVal = peek(0);
+                Value aVal = peek(1);
+                if (IS_NUMBER(bVal) && IS_NUMBER(aVal)) {
+                    double b = AS_NUMBER(pop());
+                    double a = AS_NUMBER(peek(0));
+                    Value res = NUMBER_VAL(b + a);
+                    setTop(res);
+                } else if (IS_STRING(bVal) && IS_STRING(aVal)) {
+                    concatenate();
+                } else {
+                    runtimeError("Operands must be two numbers or two strings.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+            } break;
             case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
             case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
             case OP_DIVIDE:     { BINARY_OP(NUMBER_VAL, /); } break;
@@ -136,7 +170,12 @@ run()
 #undef BINARY_OP_FUNC
 }
 
-void initVM() { resetStack(); }
+void
+initVM()
+{
+    resetStack();
+    vm.objects = NULL;
+}
 
 InterpretResult
 interpret(const char *source)
@@ -157,12 +196,15 @@ interpret(const char *source)
     return result;
 }
 
-void freeVM()
+void
+freeVM()
 {
     FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);
     vm.stack.values = NULL;
     vm.stack.capacity = 0;
     vm.stack.count = 0;
+
+    freeObjects();
 }
 
 void
