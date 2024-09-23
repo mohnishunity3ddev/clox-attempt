@@ -27,7 +27,7 @@ struct ObjString
     Obj obj;
     int length;
     char *chars;
-    bool ownsString;
+    u32 hash;
 };
 
 static inline bool
@@ -37,11 +37,24 @@ isObjType(Value value, ObjType type)
     return result;
 }
 
+/// @brief Take ownership of the string passed in.
+/// @param chars character array of the string
+/// @param length length of the string
+/// @return pointer to the string object which contains the string.
 ObjString *takeString(char *chars, int length);
+/// @brief allocate memory to copy/duplicate the string passed in
+/// @param chars character array of the string
+/// @param length length of the string
+/// @return pointer to the string object which contains the string.
 ObjString *copyString(const char *chars, int length);
+ObjString *copyStringFormat(const char *format, ...);
+
+#define USE_SINGLE_ALLOCATION 0
+#if USE_SINGLE_ALLOCATION
+// NOTE: Functions to encapsulate memory for StringObject and the string inside a single allocation.
 ObjString *makeString(const char *chars, int length, bool ownsString);
-ObjString *makeStringFormat(const char *format, ...);
 ObjString *makeStringConcat(ObjString *a, ObjString *b);
+#endif
 
 void printObject(Value value);
 

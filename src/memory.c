@@ -24,8 +24,7 @@ freeObject(Obj *object)
         case OBJ_STRING:
         {
             ObjString *string = (ObjString *)object;
-            // NOTE: Right now, the struct and the character array are one continuous allocation.
-            // FREE_ARRAY(char, string->chars, string->length + 1);
+            FREE_ARRAY(char, string->chars, string->length + 1);
             FREE(ObjString, object);
         } break;
         default: { _assert(!"Invalid Path"); } break;

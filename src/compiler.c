@@ -343,8 +343,11 @@ literal()
 static void
 string()
 {
-    // ObjString *string = copyString(parser.previous.start + 1, parser.previous.length - 2);
-    ObjString *string = makeString(parser.previous.start + 1, parser.previous.length - 2, true);
+    ObjString *string = copyString(parser.previous.start + 1, parser.previous.length - 2);
+
+    // NOTE: This was for allocating a single contiguous memory for both the string object and the character array
+    // for the strings.
+    // ObjString *string = makeString(parser.previous.start + 1, parser.previous.length - 2, false);
     Value stringValue = OBJ_VAL((Obj *)string);
     emitConstant(stringValue);
 }

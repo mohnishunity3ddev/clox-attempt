@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "value.h"
+#include "table.h"
 
 #define STACK_MAX 256
 
@@ -22,6 +23,8 @@ typedef struct
     ///        points to the instruction about to be executed.
     u8 *ip;
     Stack stack;
+    /// @brief a hashtable of unique strings (interned strings).
+    Table strings;
     Obj *objects;
 } VM;
 

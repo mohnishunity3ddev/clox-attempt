@@ -142,7 +142,8 @@
         "common.h": "c",
         "scanner.h": "c",
         "test.h": "c",
-        "compiler.h": "c"
+        "compiler.h": "c",
+        "stdarg.h": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",

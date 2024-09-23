@@ -6,9 +6,22 @@
 #include "object.h"
 #include "value.h"
 #include "vm.h"
+#include "table.h"
 
 #define ALLOCATE_OBJ(type, objectType) \
     (type *)allocateObject(sizeof(type), objectType)
+
+static u32
+hashString(const char *key, int length)
+{
+    u32 hash = 2166136261u;
+    for (int i = 0; i < length; i++)
+    {
+        hash ^= (u8)key[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
 
 static Obj *
 allocateObject(size_t size, ObjType type)
@@ -21,16 +34,89 @@ allocateObject(size_t size, ObjType type)
 }
 
 static ObjString *
-allocateString(char *chars, int length)
+allocateStringObject(char *chars, int length, u32 hash)
 {
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
     string->length = length;
     string->chars = chars;
+    string->hash = hash;
+
+    // NOTE: the vm.strings is a hashset or table of unique strings. That's all we care about. so we fill them with
+    // null values.
+    tableSet(&vm.strings, string, NIL_VAL);
     return string;
 }
 
+ObjString *
+takeString(char *chars, int length)
+{
+    u32 hash = hashString(chars, length);
+    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
+    if (interned != NULL) {
+        // This is the taking ownership part. The string is present in the hashtable so we free the memory for the
+        // string passed in here.
+        FREE_ARRAY(char, chars, length + 1);
+        return interned;
+    }
+
+    // Allocate memory for the string object and store it in the hashtable.
+    return allocateStringObject(chars, length, hash);
+}
+
+ObjString *
+copyString(const char *chars, int length)
+{
+    u32 hash = hashString(chars, length);
+
+    // NOTE: See if the string is already there in the strings hashtable in the vm.
+    // if it is, we return and forget about adding a duplicate in the table.
+    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
+    if (interned != NULL) {
+        return interned;
+    }
+
+    // Copy the new string and store it in the hash-table.
+    char *heapChars = ALLOCATE(char, length + 1);
+    memcpy(heapChars, chars, length);
+    heapChars[length] = '\0';
+
+    // Allocate memory for the string object and store it in the hashtable.
+    return allocateStringObject(heapChars, length, hash);
+}
+
+ObjString *
+copyStringFormat(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    char buffer[8192];
+    int charsWritten = vsnprintf(buffer, 8192, format, args);
+    va_end(args);
+    _assert(charsWritten <= 8192);
+    
+    ObjString *result = copyString(buffer, charsWritten);
+    return result;
+}
+
+void
+printObject(Value value)
+{
+    switch(OBJ_TYPE(value))
+    {
+        case OBJ_STRING:
+        {
+            ObjString *str = AS_STRING(value);
+            printf("%.*s", str->length, str->chars);
+        } break;
+
+        default: { _assert(!"Invalid Path"); } break;
+    }
+}
+
+#if USE_SINGLE_ALLOCATION
+// NOTE: if you want to store the object string and its character array in one single continuous memory block.
 static ObjString *
-stringObjConcat(const char *a, int lenA, const char *b, int lenB)
+stringObjectConcat(const char *a, int lenA, const char *b, int lenB)
 {
     int length = lenA + lenB;
     size_t structSize = sizeof(ObjString);
@@ -48,6 +134,14 @@ stringObjConcat(const char *a, int lenA, const char *b, int lenB)
     objString->chars[length] = '\0';
 
     return objString;
+}
+
+ObjString *
+makeStringConcat(ObjString *a, ObjString *b)
+{
+    ObjString *result = stringObjectConcat(a->chars, a->length, b->chars, b->length);
+
+    return result;
 }
 
 ObjString *
@@ -72,55 +166,7 @@ makeString(const char *chars, int length, bool ownsString)
         objString->chars = (char *)chars;
     }
 
-    objString->ownsString = ownsString;
 
     return objString;
 }
-
-ObjString *
-makeStringConcat(ObjString *a, ObjString *b)
-{
-    ObjString *result = stringObjConcat(a->chars, a->length, b->chars, b->length);
-    result->ownsString = true;
-
-    return result;
-}
-
-ObjString *
-makeStringFormat(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    char buffer[8192];
-    int charsWritten = vsnprintf(buffer, 8192, format, args);
-    va_end(args);
-
-    ObjString *result = makeString(buffer, charsWritten, true);
-    return result;
-}
-
-ObjString *
-takeString(char *chars, int length)
-{
-    return allocateString(chars, length);
-}
-
-ObjString *
-copyString(const char *chars, int length)
-{
-    char *heapChars = ALLOCATE(char, length + 1);
-    memcpy(heapChars, chars, length);
-    heapChars[length] = '\0';
-    return allocateString(heapChars, length);
-}
-
-void
-printObject(Value value)
-{
-    switch(OBJ_TYPE(value))
-    {
-        case OBJ_STRING: { printf("%s", AS_CSTRING(value)); } break;
-
-        default: { _assert(!"Invalid Path"); } break;
-    }
-}
+#endif

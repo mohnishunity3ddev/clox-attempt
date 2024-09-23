@@ -23,7 +23,17 @@ concatenate()
     ObjString *b = AS_STRING(pop());
     ObjString *a = AS_STRING(peek(0));
 
-    ObjString *result = makeStringConcat(a, b);
+    int lenA = a->length;
+    int lenB = b->length;
+    int totalLength = lenA + lenB;
+    char *str = ALLOCATE(char, totalLength+1);
+    memcpy(str, a->chars, lenA);
+    memcpy(str + lenA, b->chars, lenB);
+    str[totalLength] = '\0';
+    ObjString *result = takeString(str, totalLength);
+
+    // NOTE: This was when we made a single allocation for both the string object and its string array.
+    // ObjString *result = makeStringConcat(a, b);
     setTop(OBJ_VAL((Obj *)result));
 }
 
@@ -126,11 +136,11 @@ run()
                     Obj *strObject = NULL;
                     if (IS_NUMBER(aVal)) {
                         double a = AS_NUMBER(peek(0));
-                        strObject = (Obj *)makeStringFormat("%g%s", a, b->chars);
+                        strObject = (Obj *)copyStringFormat("%g%s", a, b->chars);
                     } else if (IS_BOOL(aVal)) {
                         bool a = AS_BOOL(aVal);
                         const char *aStr = a ? "True" : "False";
-                        strObject = (Obj *)makeStringFormat("%s%s", aStr, b->chars);
+                        strObject = (Obj *)copyStringFormat("%s%s", aStr, b->chars);
                     } else {
                         _assert(!"Should not be here!");
                     }
@@ -139,12 +149,12 @@ run()
                     if (IS_NUMBER(bVal)) {
                         double b = AS_NUMBER(pop());
                         ObjString *a = AS_STRING(peek(0));
-                        Obj *strObject = (Obj *)makeStringFormat("%s%g", a->chars, b);
+                        Obj *strObject = (Obj *)copyStringFormat("%s%g", a->chars, b);
                         setTop(OBJ_VAL(strObject));
                     } else if (IS_BOOL(bVal)) {
                         bool b = AS_BOOL(pop());
                         ObjString *a = AS_STRING(peek(0));
-                        Obj *strObject = (Obj *)makeStringFormat("%s%s", a->chars, b ? "True" : "False");
+                        Obj *strObject = (Obj *)copyStringFormat("%s%s", a->chars, b ? "True" : "False");
                         setTop(OBJ_VAL(strObject));
                     } else {
                         _assert(!"Should not be here!");
@@ -153,8 +163,8 @@ run()
                     runtimeError("Operands must be two numbers or two strings.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
             } break;
+
             case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
             case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
             case OP_DIVIDE:     { BINARY_OP(NUMBER_VAL, /); } break;
@@ -197,6 +207,7 @@ initVM()
 {
     resetStack();
     vm.objects = NULL;
+    initTable(&vm.strings);
 }
 
 InterpretResult
@@ -221,6 +232,8 @@ interpret(const char *source)
 void
 freeVM()
 {
+    freeTable(&vm.strings);
+
     FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);
     vm.stack.values = NULL;
     vm.stack.capacity = 0;
