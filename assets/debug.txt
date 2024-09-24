@@ -1,5 +1,4 @@
-var a = 4*2;
-var b = 132;
-// a*b = c+d;
-a = a*b+10;
-print "sum is = " + (a + b);
+var beverage = "cafe au lait";
+var breakfast = "beignets with " + beverage;
+breakfast = 2;
+print breakfast;

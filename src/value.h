@@ -55,6 +55,13 @@ void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 void printValue(Value value);
+
+/// @brief Get the index of a string constant in the passed in constants array if it is present here.
+/// @param array pointer to the constants array
+/// @param string the string that we want to check if it is present.
+/// @return -1 if the string is not present, Otherwise - returns the index into the array where it is present.
+int stringValueIndex(ValueArray *array, const char *string);
+
 bool valuesEqual(Value a, Value b);
 bool valuesGreater(Value a, Value b);
 bool valuesLess(Value a, Value b);

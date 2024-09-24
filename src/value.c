@@ -13,6 +13,25 @@ initValueArray(ValueArray *array)
     array->count = 0;
 }
 
+int
+stringValueIndex(ValueArray *array, const char *string)
+{
+    int result = -1;
+    for (int i = 0; i < array->count; ++i)
+    {
+        Value v = array->values[i];
+        if (v.type == VAL_OBJ) {
+            ObjString *sVal = (ObjString *)v.as.obj;
+            if (memcmp(sVal->chars, string, sVal->length) == 0) {
+                result = i;
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
 void
 writeValueArray(ValueArray *array, Value value)
 {

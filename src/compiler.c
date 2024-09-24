@@ -4,6 +4,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
+#include "value.h"
 
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
@@ -449,8 +450,23 @@ string(bool canAssign)
 static void
 namedVariable(Token name, bool canAssign)
 {
-    // add the name token's lexeme into the constants array and get the index.
-    u8 arg = identifierConstant(&name);
+    // This function gets called when the compiler encounters an identifier for a variable which should already be
+    // declared before - which means it should already be present in the constant array of the compiler. So we get
+    // the index of the constant in the constant array.
+    const char *variableName = parser.previous.start;
+    int stringIndex = stringValueIndex(&currentChunk()->constants, variableName);
+
+    u8 arg;
+    if (stringIndex >= 0) {
+        arg = (u8)stringIndex;
+    } else {
+        // add the name token's lexeme into the constants array and get the index.
+        // NOTE: We are doing this to support users using a variable before it is declared. if the string is not
+        // already in the constants array, then we add a new string constant into the array so that it can be
+        // looked up by the vm's runtime to fetch the value before it is defined and not produce a "undefined
+        // variable" error.
+        // arg = identifierConstant(&name); // NOTE: Not doing this right now.
+    }
 
     // If there is an equal '=' sign after the variable, that means this is a setter for that variable.
     // Otherwise this must be for value access i.e. a getter.

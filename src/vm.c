@@ -129,7 +129,8 @@ run()
                 // We set the value (that is already on the stack from a previous iteration of this loop) that this
                 // variable is representing into a globals hashtable where this value will be stored as a value for
                 // the key i.e. the variable name.
-                tableSet(&vm.globals, globalVarName, peek(0));
+                bool isNewKey = tableSet(&vm.globals, globalVarName, peek(0));
+                _assert(isNewKey == true);
                 // remove the value of this global variable off the top of the stack. since it is guaranteed that
                 // there will be no expression that needs to use this value after a definition.
                 pop();
@@ -144,17 +145,21 @@ run()
                 // OP_DEFINE_GLOBALS routine below.
                 ObjString *globalVar = READ_STRING();
                 Value value;
-                if (!tableGet(&vm.globals, globalVar, &value)) {
+                if (!tableGet(&vm.globals, globalVar, &value))
+                {
                     runtimeError("Undefined variable '%s'.", globalVar->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
+
                 // push the value of the global variable onto the stack so it can be used by some expression where
                 // this getter was called.
                 push(value);
             } break;
             case OP_SET_GLOBAL:
             {
+                // The global variable name.
                 ObjString *name = READ_STRING();
+
                 // Here, we want to set the value of a global variable.
                 // the hashtable set function returns true if the key for which the value was to be set, wasn't
                 // there and needed to be added. So if we get true, that means the global var name was not already
