@@ -135,7 +135,7 @@ errorAt(Token *token, const char *message)
     } else if (token->type == TOKEN_ERROR) {
         // Nothing to say.
     } else {
-        fprintf(stderr, " at '%*.s'", token->length, token->start);
+        fprintf(stderr, " at '%.*s'", token->length, token->start);
     }
 
     fprintf(stderr, ": %s\n", message);
@@ -145,7 +145,7 @@ errorAt(Token *token, const char *message)
 static void
 error(const char *message)
 {
-    errorAt(&(parser.previous), message);
+    errorAt(&parser.previous, message);
 }
 
 static void
@@ -466,6 +466,7 @@ namedVariable(Token name, bool canAssign)
         // looked up by the vm's runtime to fetch the value before it is defined and not produce a "undefined
         // variable" error.
         // arg = identifierConstant(&name); // NOTE: Not doing this right now.
+        errorAt(&name, "CompilerError (Undefined variable)");
     }
 
     // If there is an equal '=' sign after the variable, that means this is a setter for that variable.
