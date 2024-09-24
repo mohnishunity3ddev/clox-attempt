@@ -25,6 +25,8 @@ typedef struct
     Stack stack;
     /// @brief a hashtable of unique strings (interned strings).
     Table strings;
+    /// @brief a hashtable with key = names of the global variables and the value they represent.
+    Table globals;
     Obj *objects;
 } VM;
 

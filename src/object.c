@@ -93,7 +93,7 @@ copyStringFormat(const char *format, ...)
     int charsWritten = vsnprintf(buffer, 8192, format, args);
     va_end(args);
     _assert(charsWritten <= 8192);
-    
+
     ObjString *result = copyString(buffer, charsWritten);
     return result;
 }

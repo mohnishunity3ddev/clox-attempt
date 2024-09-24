@@ -64,6 +64,7 @@ run()
 {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
     {                                                                                                             \
@@ -112,6 +113,66 @@ run()
             case OP_NIL:        { push(NIL_VAL);            } break;
             case OP_TRUE:       { push(BOOL_VAL(true));     } break;
             case OP_FALSE:      { push(BOOL_VAL(false));    } break;
+
+            // Pops the top value off the stack and forgets about it. Usually after compiling and parsing an
+            // expression statement.
+            case OP_POP:        { pop();                    } break;
+
+            case OP_DEFINE_GLOBAL:
+            {
+                // The way the compiler works is that before the OP_DEFINE_GLOBAL instruction is emitted, it emits
+                // the constant value that this var represents. so that it already on the stack from the previous
+                // iteration of this loop.
+                // After this OP_DEFINE_GLOBAL instruction is the index into the constants array where the "name"
+                // string of the variable is stored.
+                ObjString *globalVarName = READ_STRING();
+                // We set the value (that is already on the stack from a previous iteration of this loop) that this
+                // variable is representing into a globals hashtable where this value will be stored as a value for
+                // the key i.e. the variable name.
+                tableSet(&vm.globals, globalVarName, peek(0));
+                // remove the value of this global variable off the top of the stack. since it is guaranteed that
+                // there will be no expression that needs to use this value after a definition.
+                pop();
+            } break;
+            case OP_GET_GLOBAL:
+            {
+                // at this point, if the vm encounters this expression, then it means the program wants to retrieve
+                // the value set of a global variable.
+                // The next bytecode is the index into the constants array where the name of this global variable
+                // is stored. We retrieve that, and then consult the globals hashtable using the global varName as
+                // key and get the actual value this global variable represents. We did that in the
+                // OP_DEFINE_GLOBALS routine below.
+                ObjString *globalVar = READ_STRING();
+                Value value;
+                if (!tableGet(&vm.globals, globalVar, &value)) {
+                    runtimeError("Undefined variable '%s'.", globalVar->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                // push the value of the global variable onto the stack so it can be used by some expression where
+                // this getter was called.
+                push(value);
+            } break;
+            case OP_SET_GLOBAL:
+            {
+                ObjString *name = READ_STRING();
+                // Here, we want to set the value of a global variable.
+                // the hashtable set function returns true if the key for which the value was to be set, wasn't
+                // there and needed to be added. So if we get true, that means the global var name was not already
+                // there in the hashtable which is infact a runtime error. Also, we dont want to a new key into the
+                // table since it should already be there, so we delete it.
+                //
+                // IMPORTANT: NOTE: Also note that when the compiler emitted this instruction, the value that this
+                // variable should be set to was already emitted before. So the value is already there onto this
+                // vm's stack due to the previous iteration of this loop. Note that we don't pop that value.
+                // Reason is that assignment is still an expression, so it needs to leave the value onto the stack
+                // in case the assignment is nested inside some larger expression.
+                if (tableSet(&vm.globals, name, peek(0)))
+                {
+                    tableDelete(&vm.globals, name);
+                    runtimeError("Undefined variable '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            } break;
 
             case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual); }    break;
             case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual); }   break;
@@ -188,16 +249,25 @@ run()
                 setTop(NUMBER_VAL(-number));
             } break;
 
-            case OP_RETURN:
+            // We pop the top value of the stack and print it onto the screen when we encounter a print opcode.
+            // When the interpreter reaches this instruction, the preceding expression has already been parsed,
+            // compiled and the result is already on top of the stack.
+            case OP_PRINT:
             {
                 printValue(pop());
                 printf("\n");
+            } break;
+
+            case OP_RETURN:
+            {
+                // Exit the interpreter.
                 return INTERPRET_OK;
             }
         }
     }
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_STRING
 #undef BINARY_OP
 #undef BINARY_OP_FUNC
 }
@@ -208,6 +278,7 @@ initVM()
     resetStack();
     vm.objects = NULL;
     initTable(&vm.strings);
+    initTable(&vm.globals);
 }
 
 InterpretResult
@@ -232,6 +303,7 @@ interpret(const char *source)
 void
 freeVM()
 {
+    freeTable(&vm.globals);
     freeTable(&vm.strings);
 
     FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);

@@ -82,13 +82,19 @@ disassembleInstruction(Chunk *chunk, int offset)
 
     switch(instruction)
     {
+        case OP_PRINT:          { result = simpleInstruction("OP_PRINT", offset); }                      break;
         case OP_RETURN:         { result = simpleInstruction("OP_RETURN", offset); }                     break;
+
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;
 
         case OP_NIL:            { result = simpleInstruction("OP_NIL", offset); }                        break;
         case OP_TRUE:           { result = simpleInstruction("OP_TRUE", offset); }                       break;
         case OP_FALSE:          { result = simpleInstruction("OP_FALSE", offset); }                      break;
+        case OP_POP:            { result = simpleInstruction("OP_POP", offset); }                        break;
+        case OP_DEFINE_GLOBAL:  { result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); }     break;
+        case OP_GET_GLOBAL:     { result = constantInstruction("OP_GET_GLOBAL", chunk, offset); }        break;
+        case OP_SET_GLOBAL:     { result = constantInstruction("OP_SET_GLOBAL", chunk, offset); }        break;
 
         case OP_NEGATE:         { result = simpleInstruction("OP_NEGATE", offset); }                     break;
         case OP_NOT:            { result = simpleInstruction("OP_NOT", offset); }                        break;
@@ -99,7 +105,6 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_GREATER_EQUAL:  { result = simpleInstruction("OP_GREATER_EQUAL", offset);}               break;
         case OP_LESS:           { result = simpleInstruction("OP_LESS", offset);}                        break;
         case OP_LESS_EQUAL:     { result = simpleInstruction("OP_LESS_EQUAL", offset);}                  break;
-
 
         case OP_ADD:            { result = simpleInstruction("OP_ADD", offset); }                        break;
         case OP_SUBTRACT:       { result = simpleInstruction("OP_SUBTRACT", offset); }                   break;

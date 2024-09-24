@@ -112,7 +112,7 @@ tableSet(Table *table, ObjString *key, Value value)
         int capacity = GROW_CAPACITY(table->capacity);
         adjustCapacity(table, capacity);
     }
-
+    
     // returns the entry with the key(in which its value gets replaced with the value that was sent in here.) that
     // was sent in here or its a null(if this will be a new entry).
     Entry *entry = findEntry(table->entries, table->capacity, key);

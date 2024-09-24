@@ -1,1 +1,5 @@
-("Hello, the value is: " + (12.1234+12.1234)) == "Hello, the value is: 24.2468"
+var a = 4*2;
+var b = 132;
+// a*b = c+d;
+a = a*b+10;
+print "sum is = " + (a + b);

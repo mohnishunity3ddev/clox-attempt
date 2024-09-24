@@ -16,6 +16,12 @@ typedef enum
     OP_TRUE,
     OP_FALSE,
 
+    /// @brief This instruction pops the top value off the stack and forgets about it.
+    OP_POP,
+    OP_DEFINE_GLOBAL,
+    OP_GET_GLOBAL,
+    OP_SET_GLOBAL,
+
     OP_EQUAL,
     OP_NOT_EQUAL,
     OP_GREATER,
@@ -30,6 +36,8 @@ typedef enum
     OP_NOT,
     /// @brief Unary operator for negative integers.
     OP_NEGATE,
+    /// @brief OpCode to print the result onto the screen.
+    OP_PRINT,
     /// @brief This op code means return from a function.
     OP_RETURN,
 } OpCode;
