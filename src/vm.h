@@ -45,6 +45,7 @@ InterpretResult interpret(const char *source);
 
 void push(Value value);
 Value pop();
+void popN(int n);
 Value peek(int indexFromLast);
 void setTop(Value value);
 

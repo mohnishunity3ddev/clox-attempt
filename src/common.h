@@ -14,6 +14,8 @@
 typedef uint8_t u8;
 typedef uint32_t u32;
 
+#define UINT8_COUNT (0xff + 1)
+
 #define _assert(expr)                                                                                             \
     if (!(expr))                                                                                                  \
     {                                                                                                             \

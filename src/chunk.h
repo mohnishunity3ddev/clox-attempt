@@ -18,8 +18,13 @@ typedef enum
 
     /// @brief This instruction pops the top value off the stack and forgets about it.
     OP_POP,
+    /// @brief instruction to pop N elements from the stack at once. has an operand telling how many items to pop
+    /// from the vm's stack.
+    OP_POPN,
     OP_DEFINE_GLOBAL,
+    OP_GET_LOCAL,
     OP_GET_GLOBAL,
+    OP_SET_LOCAL,
     OP_SET_GLOBAL,
 
     OP_EQUAL,

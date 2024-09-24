@@ -59,6 +59,14 @@ constantLongInstruction(const char *name, Chunk *chunk, int offset)
     return offset + 4;
 }
 
+static int
+byteInstruction(const char *name, Chunk *chunk, int offset)
+{
+    u8 slot = chunk->code[offset + 1];
+    printf("%-16s %4d\n", name, slot);
+    return offset + 2;
+}
+
 void
 disassembleChunk(Chunk *chunk, const char *name)
 {
@@ -91,7 +99,13 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_NIL:            { result = simpleInstruction("OP_NIL", offset); }                        break;
         case OP_TRUE:           { result = simpleInstruction("OP_TRUE", offset); }                       break;
         case OP_FALSE:          { result = simpleInstruction("OP_FALSE", offset); }                      break;
+
         case OP_POP:            { result = simpleInstruction("OP_POP", offset); }                        break;
+        case OP_POPN:           { result = byteInstruction("OP_POPN", chunk, offset); }                  break;
+
+        case OP_GET_LOCAL:      { result = byteInstruction("OP_GET_LOCAL", chunk, offset);}              break;
+        case OP_SET_LOCAL:      { result = byteInstruction("OP_SET_LOCAL", chunk, offset);}              break;
+
         case OP_DEFINE_GLOBAL:  { result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); }     break;
         case OP_GET_GLOBAL:     { result = constantInstruction("OP_GET_GLOBAL", chunk, offset); }        break;
         case OP_SET_GLOBAL:     { result = constantInstruction("OP_SET_GLOBAL", chunk, offset); }        break;

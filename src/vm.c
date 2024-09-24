@@ -117,6 +117,51 @@ run()
             // Pops the top value off the stack and forgets about it. Usually after compiling and parsing an
             // expression statement.
             case OP_POP:        { pop();                    } break;
+            // pops 'N' items at once from the stack.
+            case OP_POPN:
+            {
+                u8 popCount = READ_BYTE();
+                popN(popCount);
+            } break;
+
+            // IMPORTANT: NOTE:
+            // The one difference between how the VM works with global and local variables is that the value that
+            // global variable is supposed to have is written VM's hashtable of strings when the global variable
+            // was defined. The input to the hashtable which is a string (of the global variable's name) is written
+            // in the code chunk after these 'GET' 'SET' instructions which store the operand which is the index
+            // into the code chunk's constant's array which has the name of the global variable string (also
+            // written into by the compiler). We never look up the values of these variables from the VM's stack
+            // but rather the hashtable of global variable strings.
+            //
+            // The value for a local variable is already stored in the stack by the OP_CONSTANT instruction above.
+            // all the compiler does is tell the vm which slot in it's stack should it get the value from or which
+            // slot should be used to retrieve the required value and then push it onto its stack again as a top
+            // element. Basically the VM's stack and the COMPILER's stack have the same sequence of values.
+            //
+            // IMPORTANT: NOTE:
+            // One confusing thing is that since we are overwriting the stack when SET_LOCAL is called, will it not
+            // overwrite the values already there (using OP_CONSTANT) for global variables? and haven't we lost
+            // information that is required? The answer is it can always be looked up again when GET_GLOBAL is
+            // called since the values for globals are already stored in the hashtable of the VM and the input
+            // global variable name string - that, we get from the operand of GET_GLOBAL which is the index into
+            // the constants array which contains the string (also written by the compiler).
+            //
+            // basically even if we lost all constants and values in the stack meant for global variables, it does
+            // not matter since we can build up that stack again because all the information regarding global
+            // variables are already present in the hashtable(when the global variables were defined) and the
+            // constants array(containing the name of the global variables). so overwriting the stack at random
+            // locations with the local variables stuff does not interfere with global variables since both of them
+            // use the same stack.
+            case OP_GET_LOCAL:
+            {
+                u8 slot = READ_BYTE();
+                push(vm.stack.values[slot]);
+            } break;
+            case OP_SET_LOCAL:
+            {
+                u8 slot = READ_BYTE();
+                vm.stack.values[slot] = peek(0);
+            } break;
 
             case OP_DEFINE_GLOBAL:
             {
@@ -342,6 +387,14 @@ pop()
     vm.stack.top--;
     vm.stack.count--;
     return *vm.stack.top;
+}
+
+void
+popN(int n)
+{
+    _assert(vm.stack.count >= n);
+    vm.stack.top -= n;
+    vm.stack.count -= n;
 }
 
 Value
