@@ -467,7 +467,7 @@ identifiersEqual(Token *a, Token *b)
     return areEqual;
 }
 
-// Try to find a local variable with the given "name". "current" only has variables in the current block scope and
+// Try to find a local variable with the given "name". "compiler" only has variables in the current block scope and
 // earlier scopes where the current scope is nested inside.
 static int
 resolveLocal(Compiler *compiler, Token *name)
@@ -599,6 +599,7 @@ defineVariable(u8 global)
         markInitialized();
         return;
     }
+
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 

@@ -1,22 +1,8 @@
-var beverage = "pepsi (not that diet one please)";
-var breakfast = "chhole bhature, " + beverage;
 {
-    var a = 2;
+    var a;
     {
-        var b = 3;
-        {
-            var c = 4;
-            {
-                var e = -3;
-                var d = a*b+c-(-e);
-                var f = 1;
-                print "d is " + d;
-                print "f is " + f;
-                print "d + f = " + (d+f);
-                var add = " can you summmmell what the rock's cooking... ~.^";
-                var add2 = " in the rain.(?) ";
-                print "Breakfast: " + (breakfast + add + add2) + "And btw {d+f} = " + (d+f);
-            }
-        }
+        var b = a;
+        print "b is " + b;
+
     }
 }

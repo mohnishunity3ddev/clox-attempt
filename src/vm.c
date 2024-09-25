@@ -155,7 +155,13 @@ run()
             case OP_GET_LOCAL:
             {
                 u8 slot = READ_BYTE();
-                push(vm.stack.values[slot]);
+                Value val = vm.stack.values[slot];
+                if (IS_NIL(val)) {
+                    runtimeError("Trying to access an uninitialized variable");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                push(val);
             } break;
             case OP_SET_LOCAL:
             {
