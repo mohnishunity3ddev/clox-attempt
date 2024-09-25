@@ -901,7 +901,6 @@ forStatement()
     // has not been done.
     beginScope();
     consume(TOKEN_LEFT_PAREN, "Expected '(' after for statement.");
-
     // -- Initialization Clause --
     // Handling the for loop initialization part.
     if (match(TOKEN_SEMICOLON)) {
@@ -914,7 +913,6 @@ forStatement()
         // This consumes the semicolon and pops the value of the expression result off the stack.
         expressionStatement();
     }
-
     // -- Condition Clause --
     // 'for' loop loops back to this condition check. The initialization above only happens the first time a 'for'
     // loop was encountered. Right before the condition expression.
@@ -932,7 +930,6 @@ forStatement()
         // pop the condition exp result off the stack before executing the body of the 'for' loop.
         emitByte(OP_POP);
     }
-
     // -- Increment Clause --
     // The peculiar thing about the increment clause is that in code, it appears textually before the 'for' body
     // but is executed after the completion of one iteration of the 'for' body if the condition exp evaluates to
@@ -965,10 +962,8 @@ forStatement()
         // skip all increment code and jump straight to the code of the 'for' body.
         patchJump(bodyJump);
     }
-
     // -- For Loop Body Compilation --
     statement();
-
     emitLoop(loopStart);
     // if the condition was false(inside the condition expression), the for loop body should be skipped entirely.
     // exitJump will not be equal to -1 if there existed a condition clause.
@@ -981,6 +976,9 @@ forStatement()
     // Ends the scope for the loop.
     endScope();
 }
+
+// TODO: Implement switch statement with break and default case.
+// TODO: Implement 'continue' and 'break' for 'for' and 'while' loops.
 
 // We 'match'ed with an if statement
 // Flow that we want is:
@@ -999,27 +997,21 @@ ifStatement()
     consume(TOKEN_LEFT_PAREN, "[IF]: Expect '(' after an if statement");
     expression();
     consume(TOKEN_RIGHT_PAREN, "[IF]: Expect ')' after condition");
-
     // Emit OP_JUMP_IF_FALSE with a placeholder offset to be patched later.
     int thenJump = emitJump(OP_JUMP_IF_FALSE);
     // Pop the condition result if the jump did not happen (i.e., condition is true).
     emitByte(OP_POP);
-
     // Compile the 'then' clause.
     statement();
-
     // Emit OP_JUMP to skip the 'else' clause if the 'then' clause was executed.
     int elseJump = emitJump(OP_JUMP);
-
     // Backpatch the offset for OP_JUMP_IF_FALSE to skip the 'then' clause if the condition is false.
     patchJump(thenJump);
     emitByte(OP_POP);
-
     // If there's an 'else', compile it.
     if (match(TOKEN_ELSE)) {
         statement();
     }
-
     // Patch the OP_JUMP to skip the 'else' clause if the 'then' clause was executed.
     patchJump(elseJump);
 }
@@ -1050,12 +1042,10 @@ whileStatement()
     // caching the address after the while for the loop instruction which will jump the ip backwards to this point
     // so that the condition is evaluated once again.
     int loopStart = currentChunk()->count;
-
     consume(TOKEN_LEFT_PAREN, "Expect '(' after while.");
     // puts the condition result on top of the stack.
     expression();
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
-
     // condition jump if the condition result for the above expression is false.
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
     // pop the result of the condition off the top of the stack.

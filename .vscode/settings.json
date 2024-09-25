@@ -167,7 +167,7 @@
         "titleBar.inactiveForeground": "#e7e7e799",
         "editor.lineHighlightBorder": "#D0FEEC00"
     },
-    "editor.lineNumbers": "off",
+    "editor.lineNumbers": "on",
     "workbench.editor.showTabs": "none",
     "workbench.statusBar.visible": false,
     "breadcrumbs.enabled": false,
