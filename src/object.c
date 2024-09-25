@@ -47,6 +47,17 @@ allocateStringObject(char *chars, int length, u32 hash)
     return string;
 }
 
+ObjFunction *
+newFunction()
+{
+    // Create a zero-initialized 'function'.
+    ObjFunction *function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+    function->arity = 0;
+    function->name = NULL;
+    initChunk(&function->chunk);
+    return function;
+}
+
 ObjString *
 takeString(char *chars, int length)
 {
@@ -98,11 +109,22 @@ copyStringFormat(const char *format, ...)
     return result;
 }
 
+static void
+printFunction(ObjFunction *function)
+{
+    printf("<fn %s>", function->name->chars);
+}
+
 void
 printObject(Value value)
 {
     switch(OBJ_TYPE(value))
     {
+        case OBJ_FUNCTION:
+        {
+            printFunction(AS_FUNCTION(value));
+        } break;
+
         case OBJ_STRING:
         {
             ObjString *str = AS_STRING(value);
