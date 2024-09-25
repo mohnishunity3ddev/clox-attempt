@@ -9,9 +9,13 @@
 // #include <string.h>
 
 #define DEBUG_PRINT_CODE
+#undef DEBUG_PRINT_CODE
+
 #define DEBUG_TRACE_EXECUTION
+#undef DEBUG_TRACE_EXECUTION
 
 typedef uint8_t u8;
+typedef uint16_t u16;
 typedef uint32_t u32;
 
 #define UINT8_COUNT (0xff + 1)

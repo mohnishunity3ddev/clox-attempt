@@ -43,6 +43,16 @@ typedef enum
     OP_NEGATE,
     /// @brief OpCode to print the result onto the screen.
     OP_PRINT,
+
+    /// @brief Jump instruction for an if statement. Has a 2 byte operand telling how many bytes of code to skip
+    ///        (of the 'then' clause) if the 'if' condition was false
+    OP_JUMP_IF_FALSE,
+    /// @brief Jump instruction to skip over the 'else' clause of the 'if' statement if it's condition evaluates to
+    ///        true.
+    OP_JUMP,
+    /// @brief Jump instruction which jumps the code backwards. The offset is given in it's 2 byte operand.
+    OP_LOOP,
+
     /// @brief This op code means return from a function.
     OP_RETURN,
 } OpCode;

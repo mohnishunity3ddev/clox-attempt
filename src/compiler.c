@@ -88,6 +88,8 @@ static void unary(bool canAssign);
 static void literal(bool canAssign);
 static void string(bool canAssign);
 static void variable(bool canAssign);
+static void and_(bool canAssign);
+static void or_(bool canAssign);
 
 // Blocks can contain declarations, and control flow statements can contain other statements. That means that these
 // two functions will eventually be recursive. Hence, forward declaring them here.
@@ -117,7 +119,7 @@ ParseRule rules[] = {
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
@@ -125,7 +127,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -248,6 +250,41 @@ emitBytes(u8 byte1, u8 byte2)
     emitByte(byte2);
 }
 
+// [LOOP] instruction which jumps the code backwards instead of forwards like the normal [JUMP] instruction.
+static void
+emitLoop(int loopStart)
+{
+    emitByte(OP_LOOP);
+
+    // how far back the instruction pointer is moved to the execute the loop code again.
+    //
+    // [loopstart] points to the offset in the chunk where the condition of the while statements gets executed.
+    //
+    // The operand to the loop instruction is 2 bytes, when we reach here we need to add these 2 bytes so that ip
+    // skips these two as well. That's why the [+2]
+    int offset = currentChunk()->count - loopStart + 2;
+    if (offset > 0xffff) {
+        error("Loop body too large. Only have 2 bytes to store the offset");
+    }
+
+    // high bits first.
+    emitByte((offset >> 8) & 0xff);
+    // low bits second.
+    emitByte(offset & 0xff);
+}
+
+// Emits the jump instruction
+static int
+emitJump(u8 instruction)
+{
+    // Emit the actual jump instruction passed in.
+    emitByte(instruction);
+    // we use two bytes for the jump offset operand. A 16 bit offset lets us jump over 65536 bytes of bytecode.
+    emitByte(0xff);
+    emitByte(0xff);
+    return currentChunk()->count - 2;
+}
+
 static void
 emitReturn()
 {
@@ -275,6 +312,27 @@ static void
 emitConstant(Value value)
 {
     emitBytes(OP_CONSTANT, makeConstant(value));
+}
+
+static void
+patchJump(int offset)
+{
+    // -2 to adjust for the bytecode for the jump offset itself which we are taking to be 16 bits.
+    // this jump is basically telling how many bytes of code in there in the chunk after we emitted jump
+    // instruction and its 2 byte operand.
+    int jump = currentChunk()->count - offset - 2;
+
+    // if the jump offset should fit inside 16 bits.
+    if (jump > 0xffff) {
+        error("Too much code to jump over");
+    }
+
+    // NOTE: patch the jump offset in the chunk's code with the actual value of the jump.
+    // high 8 bits of the jump offset get stored first.
+    currentChunk()->code[offset] = (jump >> 8) & 0xff;
+    // low 8 bits of the jump offset get stored next.
+    currentChunk()->code[offset+1] = jump & 0xff;
+
 }
 
 static void
@@ -603,6 +661,66 @@ defineVariable(u8 global)
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
+// The and operator evaluates to true if both its left hand and right hand expressions are true.
+// if the left hand expression is false, then it does not need to evaluate its right hand expression, becuase the
+// whole thing will evaluate to false if either one of them is false.
+// Control Flow:
+// 1. left hand expression      { the result of this is on top of the stack. }
+// 2. OP_JUMP_IF_FALSE          { instruction to check the condition and if false, skip code based on the operand}
+// 3. OP_POP                    { pop the result of the left hand expression evaluated before coming here. }
+// 4. right hand expression     { evaluate the right hand expression and post it's result on top of the stack. }
+static void
+and_(bool canAssign)
+{
+    int endJump = emitJump(OP_JUMP_IF_FALSE);
+
+    // if the left expression true, vm comes here and we pop it off the stack.
+    // if the left expression came out to be false, we let it remain on top of the stack since that just tells the
+    // result of the whole and expression(guaranteed to be false).
+    emitByte(OP_POP);
+    // evaluate the right hand expression
+    parseExpressionWithPrecedence(PREC_AND);
+
+    // write the number of bytes of code to skip if the jump happened(when the condition was false)
+    // this skips the parseWithExpression call above to evaluate the right hand expression.
+    patchJump(endJump);
+}
+
+// This is the infix OR operator.
+//
+// This binary operation evaluates to true if either one of the expression it is between is true. so if we see the
+// left hand expression and that is true, then we skip the right hand expression because the result of the whole
+// expression will be true.
+//
+// Control Flow:
+// 1. left hand expression      { the result of this is on top of the stack. }
+// 2. OP_JUMP_IF_FALSE          { Jump code if the above expression came out to be false. }
+// 3. OP_JUMP                   { Jump code regardless }
+// 4. OP_POP                    { pop off the result of the left hand expression from the stack(guaranteed to be false). }
+// 5. right hand expression     { parse right and put the result of this whole binary op on top of the stack. }
+static void
+or_(bool canAssign)
+{
+    int elseJump = emitJump(OP_JUMP_IF_FALSE);
+    int endJump = emitJump(OP_JUMP);
+    // -> skip the above endJump statement - that should be 3 bytes of code - JUMP_IF_FALSE + 2 bytes of operand.
+    //
+    // -> if the left hand exp spits out false, then we need to evaluate the right hand expression, so we skip the
+    //    above 'endJump' statement and let the code parse the right hand expression.
+    //
+    // -> if the left hand exp spits out true, then we get to the above 'endJump' statement, which does skip the
+    //    code parsing the right hand expression - which is right since 'or' is true when either one of the 'or'
+    //    operands is true. so if the left exp is true, we skip parsing the right hand exp.
+    patchJump(elseJump);
+    // pop the result of the left hand expression off the stackTop since that is true, we are going to evaluate
+    // the right hand expression which will decide the result of this 'or' expression.
+    emitByte(OP_POP);
+    // parse the right hand expression.
+    parseExpressionWithPrecedence(PREC_OR);
+    // jump the right hand expression code.
+    patchJump(endJump);
+}
+
 static void
 unary(bool canAssign)
 {
@@ -762,6 +880,150 @@ expressionStatement()
     emitByte(OP_POP);
 }
 
+// For loops - for (var i = 0; i < 10; i += 1)
+// Control Flow:
+// 1.  Initializer Clause           <-> var i = 0;
+// 2.  Condition Expression.        <-> check if i < 10. If it is execute the 'body' of the loop.
+// 3.  OP_JUMP_IF_FALSE             <-> **Jumps to 11** skip the for loop altogether.
+// 4.  OP_POP                       <-> Pop the condition result off the stack.
+// 5.  OP_JUMP                      <-> **Jumps to 9** execute the 'body' of the 'for' loop.
+// 6.  Increment Expression         <-> increment i - i += 1
+// 7.  OP_POP                       <-> pop the value of i off the stack before executing the body.
+// 8.  OP_LOOP                      <-> **Jumps to 2** it is after incrementing that we go back and check the condition clause.
+// 9.  Body Statement               <-> compile the code inside the 'for' body.
+// 10. OP_LOOP                      <-> **Jumps to 6** run the increment expression after the execution of the 'body'
+// 11. OP_POP                       <-> Pop the condition result off the stack.
+// continues...
+static void
+forStatement()
+{
+    // if there are variable declarations inside the for loop clause, we need them to be visible until the for loop
+    // has not been done.
+    beginScope();
+    consume(TOKEN_LEFT_PAREN, "Expected '(' after for statement.");
+
+    // -- Initialization Clause --
+    // Handling the for loop initialization part.
+    if (match(TOKEN_SEMICOLON)) {
+        // No Initializer of the 'for' loop.
+    } else if (match(TOKEN_VAR)) {
+        // Initializer present
+        varDeclaration();
+    } else {
+        // The initializer variable has been declared before the start of the for loop. So no 'var' present here.
+        // This consumes the semicolon and pops the value of the expression result off the stack.
+        expressionStatement();
+    }
+
+    // -- Condition Clause --
+    // 'for' loop loops back to this condition check. The initialization above only happens the first time a 'for'
+    // loop was encountered. Right before the condition expression.
+    int loopStart = currentChunk()->count;
+    int exitJump = -1;
+    // This is not an infinite loop - there's an actual condition check present here.
+    if (!match(TOKEN_SEMICOLON)) {
+        // compile the condition expression.
+        expression();
+        // eat up the semicolon after the condition expression.
+        consume(TOKEN_SEMICOLON, "Expected a ';' after loop condition.");
+        // Jump out of the 'for' loop when the condition is false. This is the instruction that causes the end of a
+        // for loop.
+        exitJump = emitJump(OP_JUMP_IF_FALSE);
+        // pop the condition exp result off the stack before executing the body of the 'for' loop.
+        emitByte(OP_POP);
+    }
+
+    // -- Increment Clause --
+    // The peculiar thing about the increment clause is that in code, it appears textually before the 'for' body
+    // but is executed after the completion of one iteration of the 'for' body if the condition exp evaluates to
+    // true.
+    //
+    // what we do here is we jump over the increment, run the body, jump back up to the increment, run it, and then
+    // go to the next iteration of the loop.
+    if (!match(TOKEN_RIGHT_PAREN)) {
+        // Unconditional Jump instruction.
+        // Jump over the increment expression since that is executed after the 'for' body has executed.
+        int bodyJump = emitJump(OP_JUMP);
+        // offset into the chunk's code where the increment code is actually present.
+        int incrementStart = currentChunk()->count;
+        // compile the increment expression.
+        expression();
+        // the above expression is likely an assignment. compile it for it's side effect and remove the value off
+        // the stack.
+        emitByte(OP_POP);
+        // consume the ')' marking the end of the for expression.
+        consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clause.");
+        // this emits the OP_LOOP instruction which moves the instruction pointer back to the beginning of the for
+        // loop - right before the condition expression if there is one. Doing this here because the increment
+        // 'appears' before but is actually executed at the end of the body.
+        emitLoop(loopStart);
+        // change loopStart to point to the offset where the increment expression begins in the chunk's code.
+        // This will make it so that after we emit the loop instruction after the end of the body below, the loop
+        // instruction there will make the instruction pointer move to the point where the increment expression is
+        // done. This is how we weave the increment in to run after the execution of the body.
+        loopStart = incrementStart;
+        // skip all increment code and jump straight to the code of the 'for' body.
+        patchJump(bodyJump);
+    }
+
+    // -- For Loop Body Compilation --
+    statement();
+
+    emitLoop(loopStart);
+    // if the condition was false(inside the condition expression), the for loop body should be skipped entirely.
+    // exitJump will not be equal to -1 if there existed a condition clause.
+    if (exitJump != -1) {
+        // we do this only when there is a condition clause, without it - we have no jump instruction to patch and
+        // no value of the condition exp result to pop from the stack.
+        patchJump(exitJump);
+        emitByte(OP_POP);
+    }
+    // Ends the scope for the loop.
+    endScope();
+}
+
+// We 'match'ed with an if statement
+// Flow that we want is:
+// 1 - if (condition)       { condition gets put on top of the stack }
+// 2 - OP_JUMP_IF_FALSE     { jumps to 6 if the condition was false }
+// 3 - OP_POP               { pops the condition off the stack }
+// 4 - then {}              { executes the then block. }
+// 5 - OP_JUMP              { Jumps to 8 }
+// 6 - OP_POP               { pops the condition off the stack. }
+// 7 - else {}              { executes the else block }
+// 8 - IF_THEN_ELSE_END     { end of the if statement blocks }
+static void
+ifStatement()
+{
+    // After 'if', expect '(' and compile the condition expression.
+    consume(TOKEN_LEFT_PAREN, "[IF]: Expect '(' after an if statement");
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "[IF]: Expect ')' after condition");
+
+    // Emit OP_JUMP_IF_FALSE with a placeholder offset to be patched later.
+    int thenJump = emitJump(OP_JUMP_IF_FALSE);
+    // Pop the condition result if the jump did not happen (i.e., condition is true).
+    emitByte(OP_POP);
+
+    // Compile the 'then' clause.
+    statement();
+
+    // Emit OP_JUMP to skip the 'else' clause if the 'then' clause was executed.
+    int elseJump = emitJump(OP_JUMP);
+
+    // Backpatch the offset for OP_JUMP_IF_FALSE to skip the 'then' clause if the condition is false.
+    patchJump(thenJump);
+    emitByte(OP_POP);
+
+    // If there's an 'else', compile it.
+    if (match(TOKEN_ELSE)) {
+        statement();
+    }
+
+    // Patch the OP_JUMP to skip the 'else' clause if the 'then' clause was executed.
+    patchJump(elseJump);
+}
+
 // A print statement evaluates an expression and then prints the result. So we first parse and compile the
 // expression. The grammar requires a ';' after the print statement, so we consume it and then emit the print token
 // to the stack to print the result.
@@ -773,11 +1035,54 @@ printStatement()
     emitByte(OP_PRINT);
 }
 
+// difference between while and if here is just the loop instruction, otherwise, its all the same.
+// Control Flow:
+// 1. Condition Expression          { Condition expression after the while statement }
+// 2. OP_JUMP_IF_FALSE              { Jump forwards if the condition above evaluates to false. } **Jumps to 6**
+// 3. OP_POP                        { Pop the condition result off the stack. }
+// 4. Body of the while statement   {}
+// 5. OP_LOOP                       { Loop instruction to jump the code backwards to the while condition to check it again. }
+///                                 <--This one Jumps to 1-->
+// 6. OP_POP                        { Pop the condition expression result off the stack. }
+static void
+whileStatement()
+{
+    // caching the address after the while for the loop instruction which will jump the ip backwards to this point
+    // so that the condition is evaluated once again.
+    int loopStart = currentChunk()->count;
+
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after while.");
+    // puts the condition result on top of the stack.
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
+
+    // condition jump if the condition result for the above expression is false.
+    int exitJump = emitJump(OP_JUMP_IF_FALSE);
+    // pop the result of the condition off the top of the stack.
+    emitByte(OP_POP);
+    // parse the while block.
+    statement();
+    // Jump back to the start of the while so that the code keeps looping until the condition is false.
+    emitLoop(loopStart);
+    // backpatch the operand of the jump instruction, so that it can skip the while block code when the condition
+    // is false.
+    patchJump(exitJump);
+    // if the above jump happened, the condition exp is still on the top of stack. Pop it off since we dont need
+    // it.
+    emitByte(OP_POP);
+}
+
 static void
 statement()
 {
     if (match(TOKEN_PRINT)) {
         printStatement();
+    } else if (match(TOKEN_FOR)) {
+        forStatement();
+    } else if (match(TOKEN_IF)) {
+        ifStatement();
+    } else if (match(TOKEN_WHILE)) {
+        whileStatement();
     } else if (match(TOKEN_LEFT_BRACE)) {
         beginScope();
         block();

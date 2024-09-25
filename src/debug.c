@@ -67,6 +67,17 @@ byteInstruction(const char *name, Chunk *chunk, int offset)
     return offset + 2;
 }
 
+static int
+jumpInstruction(const char *name, int sign, Chunk *chunk, int offset)
+{
+    // The jump instruction operand is a 2 byte blob telling us how much code to skip over.
+    u16 jump = (u16)(chunk->code[offset + 1] << 8);
+    jump |= chunk->code[offset + 2];
+    // print out where does the code jump to.
+    printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
+    return offset + 3;
+}
+
 void
 disassembleChunk(Chunk *chunk, const char *name)
 {
@@ -92,6 +103,10 @@ disassembleInstruction(Chunk *chunk, int offset)
     {
         case OP_PRINT:          { result = simpleInstruction("OP_PRINT", offset); }                      break;
         case OP_RETURN:         { result = simpleInstruction("OP_RETURN", offset); }                     break;
+
+        case OP_JUMP:           { result = jumpInstruction("OP_JUMP", 1, chunk, offset); }               break;
+        case OP_JUMP_IF_FALSE:  { result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); }      break;
+        case OP_LOOP:           { result = jumpInstruction("OP_LOOP", -1, chunk, offset); }              break;
 
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;

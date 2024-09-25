@@ -1,8 +1,20 @@
+var name = "Mani";
+for (var i = 0; i < 5; i = i+1)
 {
-    var a;
+    var index = i+1;
+    if ((index == 0 or index == 2) and index > 0)
     {
-        var b = a;
-        print "b is " + b;
-
+        print "Iteration[" + index + "] := " + name;
     }
+}
+
+var i = 10;
+while( i > 0)
+{
+    if (i > 5)
+    {
+        print i;
+    }
+
+    i = i-1;
 }

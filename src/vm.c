@@ -63,6 +63,8 @@ static InterpretResult
 run()
 {
 #define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() \
+    (vm.ip += 2, (u16)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                                                                                  \
@@ -124,34 +126,16 @@ run()
                 popN(popCount);
             } break;
 
-            // IMPORTANT: NOTE:
-            // The one difference between how the VM works with global and local variables is that the value that
-            // global variable is supposed to have is written VM's hashtable of strings when the global variable
-            // was defined. The input to the hashtable which is a string (of the global variable's name) is written
-            // in the code chunk after these 'GET' 'SET' instructions which store the operand which is the index
-            // into the code chunk's constant's array which has the name of the global variable string (also
-            // written into by the compiler). We never look up the values of these variables from the VM's stack
-            // but rather the hashtable of global variable strings.
+            // Global variables are stored in the VM's hashtable. The operand for 'GET' and 'SET' instructions
+            // is an index into the constant array, which holds the global variable name. Globals are accessed
+            // from the hashtable, not the stack.
             //
-            // The value for a local variable is already stored in the stack by the OP_CONSTANT instruction above.
-            // all the compiler does is tell the vm which slot in it's stack should it get the value from or which
-            // slot should be used to retrieve the required value and then push it onto its stack again as a top
-            // element. Basically the VM's stack and the COMPILER's stack have the same sequence of values.
+            // Local variables' values are stored directly on the stack. The compiler tells the VM which stack
+            // slot to use for retrieving or storing the value. The VM and compiler's stacks stay in sync.
             //
-            // IMPORTANT: NOTE:
-            // One confusing thing is that since we are overwriting the stack when SET_LOCAL is called, will it not
-            // overwrite the values already there (using OP_CONSTANT) for global variables? and haven't we lost
-            // information that is required? The answer is it can always be looked up again when GET_GLOBAL is
-            // called since the values for globals are already stored in the hashtable of the VM and the input
-            // global variable name string - that, we get from the operand of GET_GLOBAL which is the index into
-            // the constants array which contains the string (also written by the compiler).
-            //
-            // basically even if we lost all constants and values in the stack meant for global variables, it does
-            // not matter since we can build up that stack again because all the information regarding global
-            // variables are already present in the hashtable(when the global variables were defined) and the
-            // constants array(containing the name of the global variables). so overwriting the stack at random
-            // locations with the local variables stuff does not interfere with global variables since both of them
-            // use the same stack.
+            // Even though 'SET_LOCAL' overwrites stack values, global variable values can always be retrieved
+            // using 'GET_GLOBAL' since globals are stored in the hashtable and their names in the constants
+            // array. The stack can be rebuilt as needed.
             case OP_GET_LOCAL:
             {
                 u8 slot = READ_BYTE();
@@ -314,6 +298,34 @@ run()
                 printf("\n");
             } break;
 
+            // skip over the 'else' clause of the 'if' statement if it's condition evaluates to true.
+            case OP_JUMP:
+            {
+                u16 offset = READ_SHORT();
+                vm.ip += offset;
+            } break;
+
+            // skip over the 'then' clause of the 'if' statement if it's condition evaluates to false.
+            case OP_JUMP_IF_FALSE:
+            {
+                // Get the number of bytes to skip if the condition evaluates to false.
+                u16 jumpOffset = READ_SHORT();
+                // result of the 'if' statement condition at this point is on top of the stack.
+                Value ifConditionResult = peek(0);
+                // if the 'if' condition is false, skip the 'then' clause of the 'if'. Otherwise, we leave the ip
+                // alone and parse the 'then' code following the jump instruction uninterrupted.
+                if (isFalsey(ifConditionResult)) {
+                    vm.ip += jumpOffset;
+                }
+                // NOTE: we keep the if condition result there on the stack.
+            } break;
+
+            case OP_LOOP:
+            {
+                u16 offset = READ_SHORT();
+                vm.ip -= offset;
+            } break;
+
             case OP_RETURN:
             {
                 // Exit the interpreter.
@@ -322,6 +334,7 @@ run()
         }
     }
 #undef READ_BYTE
+#undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
