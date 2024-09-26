@@ -357,12 +357,12 @@ initCompiler(Compiler *compiler, FunctionType funcType)
 {
     compiler->function = NULL;
     compiler->type = funcType;
-
+    
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
     compiler->function = newFunction();
     current = compiler;
-    
+
     Local *local = &current->locals[current->localCount++];
     local->depth = 0;
     local->name.start = "";

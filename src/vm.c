@@ -42,6 +42,7 @@ resetStack()
 {
     vm.stack.top = vm.stack.values;
     vm.stack.count = 0;
+    vm.frameCount = 0;
 }
 
 static void
@@ -53,8 +54,10 @@ runtimeError(const char *format, ...)
     va_end(args);
     fputs("\n", stderr);
 
-    size_t offset = vm.ip - vm.chunk->code - 1;
-    int line = getLine(vm.chunk, offset);
+    // get the topmost frame from the callframe stack.
+    CallFrame *frame = &vm.frames[vm.frameCount - 1];
+    size_t instruction = frame->ip - frame->function->chunk.code - 1;
+    int line = frame->function->chunk.lines.values[instruction].line;
     fprintf(stderr, "[line %d] in script\n", line);
     resetStack();
 }
@@ -62,10 +65,12 @@ runtimeError(const char *format, ...)
 static InterpretResult
 run()
 {
-#define READ_BYTE() (*vm.ip++)
+    CallFrame *frame = &vm.frames[vm.frameCount - 1];
+
+#define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() \
-    (vm.ip += 2, (u16)((vm.ip[-2] << 8) | vm.ip[-1]))
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+    (frame->ip += 2, (u16)((frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
@@ -99,8 +104,9 @@ run()
             printf(" ]");
         }
         printf("\n");
-        int offset = (int)(vm.ip - vm.chunk->code);
-        disassembleInstruction(vm.chunk, offset);
+        // Reading the chunk of code from the current function's frame.
+        int offset = (int)(frame->ip - frame->function->chunk.code);
+        disassembleInstruction(&frame->function->chunk, offset);
 #endif
 
         u8 instruction;
@@ -139,7 +145,8 @@ run()
             case OP_GET_LOCAL:
             {
                 u8 slot = READ_BYTE();
-                Value val = vm.stack.values[slot];
+                // access the given numbered slot relative to the beginning of that frame.
+                Value val = frame->slots[slot];
                 if (IS_NIL(val)) {
                     runtimeError("Trying to access an uninitialized variable");
                     return INTERPRET_RUNTIME_ERROR;
@@ -150,7 +157,7 @@ run()
             case OP_SET_LOCAL:
             {
                 u8 slot = READ_BYTE();
-                vm.stack.values[slot] = peek(0);
+                frame->slots[slot] = peek(0);
             } break;
 
             case OP_DEFINE_GLOBAL:
@@ -302,7 +309,7 @@ run()
             case OP_JUMP:
             {
                 u16 offset = READ_SHORT();
-                vm.ip += offset;
+                frame->ip += offset;
             } break;
 
             // skip over the 'then' clause of the 'if' statement if it's condition evaluates to false.
@@ -315,7 +322,7 @@ run()
                 // if the 'if' condition is false, skip the 'then' clause of the 'if'. Otherwise, we leave the ip
                 // alone and parse the 'then' code following the jump instruction uninterrupted.
                 if (isFalsey(ifConditionResult)) {
-                    vm.ip += jumpOffset;
+                    frame->ip += jumpOffset;
                 }
                 // NOTE: we keep the if condition result there on the stack.
             } break;
@@ -323,7 +330,7 @@ run()
             case OP_LOOP:
             {
                 u16 offset = READ_SHORT();
-                vm.ip -= offset;
+                frame->ip -= offset;
             } break;
 
             case OP_RETURN:
@@ -353,19 +360,25 @@ initVM()
 InterpretResult
 interpret(const char *source)
 {
-    Chunk chunk;
-    initChunk(&chunk);
-
-    if (!compile(source, &chunk)) {
-        freeChunk(&chunk);
+    // passing the source code to the compiler and getting back the top level function code (main function's code).
+    ObjFunction *function = compile(source);
+    if (function == NULL)
         return INTERPRET_COMPILE_ERROR;
-    }
 
-    vm.chunk = &chunk;
-    vm.ip = vm.chunk->code;
+    // store the top level function object(the main function) on the stack.
+    push(OBJ_VAL((Obj *)function));
+
+    // Prepare an initial callFrame to execute it's code.
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->function = function;
+    // the current callFrame's ip points to the first line of code of this top level function returned from the
+    // compiler.
+    frame->ip = function->chunk.code;
+    // the first location in the vm's stack where it's local variables are stored.
+    frame->slots = vm.stack.values;
+
+    // With the main function's Frame set up, we can start executing it's code.
     InterpretResult result = run();
-
-    freeChunk(&chunk);
     return result;
 }
 
@@ -375,9 +388,11 @@ freeVM()
     freeTable(&vm.globals);
     freeTable(&vm.strings);
 
+#if USE_DYNAMIC_STACK
     FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);
     vm.stack.values = NULL;
     vm.stack.capacity = 0;
+#endif
     vm.stack.count = 0;
 
     freeObjects();
@@ -386,6 +401,7 @@ freeVM()
 void
 push(Value value)
 {
+#if USE_DYNAMIC_STACK
     if (vm.stack.capacity < vm.stack.count + 1)
     {
         int oldCapacity = vm.stack.capacity;
@@ -394,6 +410,9 @@ push(Value value)
         vm.stack.values = GROW_ARRAY(Value, vm.stack.values, oldCapacity, vm.stack.capacity);
         vm.stack.top = vm.stack.values + vm.stack.count;
     }
+#else
+    _assert(vm.stack.count <= STACK_MAX - 1);
+#endif
 
     *vm.stack.top = value;
     vm.stack.top++;
@@ -403,6 +422,8 @@ push(Value value)
 Value
 pop()
 {
+    _assert(vm.stack.count >= 1);
+
     vm.stack.top--;
     vm.stack.count--;
     return *vm.stack.top;

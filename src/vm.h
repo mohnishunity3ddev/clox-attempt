@@ -1,27 +1,56 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
+#include "object.h"
 #include "chunk.h"
 #include "value.h"
 #include "table.h"
 
-#define STACK_MAX 256
+#define FRAMES_MAX 64
+#define USE_DYNAMIC_STACK 0
+#if !USE_DYANMIC_STACK
+    #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
+#endif
+
+
+/// @brief Keeps track of where the caller should begin after calling a function. And where on the vm's stack does
+///        the variables local to the function begin.
+///        This is during a function invocation, it has not returned yet to the caller.
+///        Each time a function is called, this struct is created.
+typedef struct {
+    /// @brief caller function. which has its bytecode (containing constants and the bytecode itself). Also has the
+    /// name of the function currently being executed.
+    ObjFunction *function;
+
+    /// @brief Instead of storing the return address in the callee's frame, caller stores its own ip. When we
+    ///        return from a function, The VM will jump to the ip of the caller's CallFrame.
+    u8 *ip;
+
+    /// @brief Points to the location in the VM's stack where the first local variable in the function begins.
+    Value *slots;
+} CallFrame;
 
 typedef struct
 {
     int count;
-    int capacity;
     Value *top;
+#if USE_DYNAMIC_STACK
+    int capacity;
     Value *values;
+#else
+    Value values[STACK_MAX];
+#endif
 } Stack;
 
 typedef struct
 {
-    /// @brief The chunk which the VM is currently processing.
-    Chunk *chunk;
-    /// @brief Instruction Pointer - cursor position of the vm telling where it is inside the chunk.
-    ///        points to the instruction about to be executed.
-    u8 *ip;
+    /// @brief each Callframe represents its own ip and the pointer to the ObjFunction that it's executing.
+    CallFrame frames[FRAMES_MAX];
+
+    /// @brief Current height of the CallFrame Stack (number of ongoing function calls which haven't finished
+    ///        executing yet.)
+    int frameCount;
+
     Stack stack;
     /// @brief a hashtable of unique strings (interned strings).
     Table strings;
