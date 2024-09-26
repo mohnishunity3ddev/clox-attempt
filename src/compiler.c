@@ -57,13 +57,27 @@ typedef struct {
     // TODO: Implement const variables. Do the same for global variables.
 } Local;
 
+typedef enum {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT,
+} FunctionType;
+
 /// @brief struct to keep track of the compiler state.
 typedef struct {
-    /// @brief flat array of all locals that are in scope during each point in the compilation process. ordered in
-    ///        the array in the order that their declarations appear in code. Since we have a hard-limit on the
-    ///        number of constants that the compiler can access(only one byte is used to get the index into this
-    ///        array), so we have a fixed size of max locals that there can be inside one scope.Therefore, the max
-    ///        number of locals that are allowed is 256 since 0-255 is the range that fits inside a byte.
+    /// @brief the function the compiler is parsing right now. "Top level" function is implicit. The compiler is
+    /// always inside a function. Top level is an automatic main function.
+    ObjFunction *function;
+
+    /// @brief tells the compiler whether its inside the "top-level" main function or a user-defined function.
+    FunctionType type;
+
+    /// @brief locals array keeps track of which stack slots are associated with which local variables or
+    ///        temporaries. flat array of all locals that are in scope during each point in the compilation
+    ///        process. ordered in the array in the order that their declarations appear in code. Since we have a
+    ///        hard-limit on the number of constants that the compiler can access(only one byte is used to get the
+    ///        index into this array), so we have a fixed size of max locals that there can be inside one
+    ///        scope.Therefore, the max number of locals that are allowed is 256 since 0-255 is the range that fits
+    ///        inside a byte.
     Local locals[UINT8_COUNT];
 
     /// @brief Number of locals in one local scope + earlier lesser scope depths since earlier less scope depth
@@ -149,10 +163,13 @@ static void expression();
 static ParseRule *getRule(TokenType type);
 static void parseExpressionWithPrecedence(Precedence precedence);
 
+/// @brief get the current function's chunk whose code the compiler is compiling.
+/// @return
 static Chunk *
 currentChunk()
 {
-    return compilingChunk;
+    Chunk *result = &current->function->chunk;
+    return result;
 }
 
 static void
@@ -336,23 +353,39 @@ patchJump(int offset)
 }
 
 static void
-initCompiler(Compiler *compiler)
+initCompiler(Compiler *compiler, FunctionType funcType)
 {
+    compiler->function = NULL;
+    compiler->type = funcType;
+
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->function = newFunction();
     current = compiler;
+    
+    Local *local = &current->locals[current->localCount++];
+    local->depth = 0;
+    local->name.start = "";
+    local->name.length = 0;
 }
 
-static void
+
+static ObjFunction *
 endCompiler()
 {
     emitReturn();
+    ObjFunction *function = current->function;
+
 #ifdef DEBUG_PRINT_CODE
-    if (!parser.hadError)
-    {
-        disassembleChunk(currentChunk(), "code");
+    if (!parser.hadError) {
+        // name is the implicit top level function we call "main"
+        const char *chunkName = function->name != NULL ? function->name->chars
+                                                       : "<main>";
+        disassembleChunk(currentChunk(), chunkName);
     }
 #endif
+
+    return function;
 }
 
 static void
@@ -1133,16 +1166,19 @@ declaration()
     }
 }
 
-bool
-compile(const char *source, Chunk *chunk)
+/// @brief main entry point of the compiler
+/// @param source source code to compile.
+/// @return
+ObjFunction *
+compile(const char *source)
 {
     initScanner(source);
 
     // Initialize the compiler from an empty state.
     Compiler compiler;
-    initCompiler(&compiler);
+    initCompiler(&compiler, TYPE_SCRIPT);
 
-    compilingChunk = chunk;
+    compilingChunk = &compiler.function->chunk;
 
     parser.hadError  = false;
     parser.panicMode = false;
@@ -1154,6 +1190,6 @@ compile(const char *source, Chunk *chunk)
         declaration();
     }
 
-    endCompiler();
-    return !parser.hadError;
+    ObjFunction *function = endCompiler();
+    return parser.hadError ? NULL : function;
 }

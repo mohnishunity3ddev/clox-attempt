@@ -32,13 +32,13 @@ struct ObjString {
     u32 hash;
 };
 
-/// @brief describes a function
+/// @brief describes the runtime representation of a function
 typedef struct {
     /// @brief base class obj header.
     Obj obj;
     /// @brief Number of parameters the function expects.
     int arity;
-    /// @brief chunk of code this function has.
+    /// @brief chunk of code this function has. A function gets to have its own chunk.
     Chunk chunk;
     /// @brief describes the name of the function
     ObjString *name;
