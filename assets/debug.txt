@@ -1,20 +1,5 @@
-var name = "Mani";
-for (var i = 0; i < 5; i = i+1)
-{
-    var index = i+1;
-    if ((index == 0 or index == 2) and index > 0)
-    {
-        print "Iteration[" + index + "] := " + name;
-    }
+fun myFunc() {
+    print "Yuhuuu!";
 }
 
-var i = 10;
-while( i > 0)
-{
-    if (i > 5)
-    {
-        print i;
-    }
-
-    i = i-1;
-}
+print myFunc;

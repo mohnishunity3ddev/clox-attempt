@@ -301,7 +301,8 @@ run()
             // compiled and the result is already on top of the stack.
             case OP_PRINT:
             {
-                printValue(pop());
+                Value stackTop = pop();
+                printValue(stackTop);
                 printf("\n");
             } break;
 

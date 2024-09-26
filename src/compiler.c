@@ -12,6 +12,7 @@
 #endif
 
 #define UNINITIALIZED_MARKER -1
+typedef struct Compiler Compiler;
 
 typedef struct
 {
@@ -58,14 +59,32 @@ typedef struct {
 } Local;
 
 typedef enum {
-    TYPE_FUNCTION,
-    TYPE_SCRIPT,
+    TYPE_FUNCTION_USER_DEFINED,
+    TYPE_FUNCTION_MAIN,
 } FunctionType;
 
 /// @brief struct to keep track of the compiler state.
-typedef struct {
+///        stores data like which slots are owned by which local variables. how many blocks of nesting we're
+///        currently in. All of this is specific to a single function.
+///        A Compiler struct is separate for each function being compiled.
+struct Compiler {
+    /// @brief We need to compile multiple functions nested within each other. Managing it is to create a separate
+    ///        compiler for each function being compiled. initCompiler() sets the compiler to be the current one.
+    ///        As we compile the function's body in the 'functionDeclaration()' function, all of the functions that
+    ///        emit bytecode write to the chunk owned by the new Compiler's function. When we finish the current
+    ///        function and return back to the caller by calling 'endCompiler()', the callee function gets written
+    ///        as a constant into the constant array of the CALLEE function i.e. the "enclosing" function.
+    ///        The problem is that we lost the callee function since when we initCompiler() for the callee function
+    ///        declaration we lost the current "compiler" since that will be pointing to the "callee" or "called"
+    ///        function from where we have returned to the caller function when we called endCompiler() when the
+    ///        "callee" function's compilation ended. How do we set the current compiler pointer back to the caller
+    ///        function? For that we have a linked list and this variable stores a pointer to the function's caller
+    ///        which is basically the enclosing function that we need inside function() called from
+    ///        functionDeclaration() here.
+    Compiler *enclosing;
+
     /// @brief the function the compiler is parsing right now. "Top level" function is implicit. The compiler is
-    /// always inside a function. Top level is an automatic main function.
+    ///        always inside a function. Top level is an automatic main function.
     ObjFunction *function;
 
     /// @brief tells the compiler whether its inside the "top-level" main function or a user-defined function.
@@ -81,14 +100,14 @@ typedef struct {
     Local locals[UINT8_COUNT];
 
     /// @brief Number of locals in one local scope + earlier lesser scope depths since earlier less scope depth
-    /// variables are visible in the current scope.
+    ///        variables are visible in the current scope.
     int localCount;
 
     /// @brief Number of blocks 'surrounding' the bit of code that we are processing currently.
     ///        0 depth is the global scope, 1 is the first scope, 2 is the nested scope inside the first scope and
     ///        so on.
     int scopeDepth;
-} Compiler;
+};
 
 Parser parser;
 Chunk *compilingChunk;
@@ -355,13 +374,21 @@ patchJump(int offset)
 static void
 initCompiler(Compiler *compiler, FunctionType funcType)
 {
+    // set the current compiler to the caller where a new function was called from.
+    compiler->enclosing = current;
     compiler->function = NULL;
     compiler->type = funcType;
-    
+
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
     compiler->function = newFunction();
     current = compiler;
+    // parse the new function's name
+    if (funcType != TYPE_FUNCTION_MAIN) {
+        // We need heap allocation here since the function name is taken from the source which only lives until the
+        // compiler is running before it is freed. We need the function name at runtime when the VM is running.
+        current->function->name = copyString(parser.previous.start, parser.previous.length);
+    }
 
     Local *local = &current->locals[current->localCount++];
     local->depth = 0;
@@ -369,7 +396,8 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->name.length = 0;
 }
 
-
+/// @brief  emit a return statement to exit the currently running function.
+/// @return The pointer to the currently running function's object where we are returning from.
 static ObjFunction *
 endCompiler()
 {
@@ -384,7 +412,8 @@ endCompiler()
         disassembleChunk(currentChunk(), chunkName);
     }
 #endif
-
+    // get the caller's function compiler since the called one ended by calling this function.
+    current = current->enclosing;
     return function;
 }
 
@@ -670,9 +699,17 @@ parseVariable(const char *errorMessage)
     return constantIndex;
 }
 
+// This ensures you can’t access a variable’s value inside the variable’s own initializer. That would be bad
+// because the variable doesn’t have a value yet.
 static inline void
 markInitialized()
 {
+    // Before, we called markInitialized() only when we already knew we were in a local scope. Now, a top-level
+    // function declaration will also call this function. When that happens, there is no local variable to mark
+    // initialized—the function is bound to a global variable.
+    if (current->scopeDepth == 0)
+        return;
+
     // Giving the last local variable a non-negative depth(current scope depth) means it is initialized.
     current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
@@ -865,6 +902,64 @@ block()
     }
 
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after a block.");
+}
+
+// Compile the function itself - it's parameter list and it's block body.
+//
+// This helper function generates code that leaves the function object on top of the stack so that it can be
+// retrieved by popping the top value off the stack and THAT value will be guaranteed to be assocaited with the
+// defined variable since call defineVariable() afterwards to store that function back into the variable we
+// declared for it
+static void
+function(FunctionType type)
+{
+    Compiler compiler;
+    initCompiler(&compiler, type);
+
+    // This beginScope() doesn’t have a corresponding endScope() call. Because we end Compiler completely when we
+    // reach the end of the function body, there’s no need to close the lingering outermost scope.
+    beginScope();
+
+    // Checking the normal tokens that are expected when a function is declared.
+    consume(TOKEN_LEFT_PAREN, "Expected a '(' after a function declaration");
+    // Parse function parameters
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            // increment function parameter count
+            current->function->arity++;
+            if (current->function->arity > 255) {
+                errorAtCurrent("cannot have more than 255 arguments");
+            }
+            u8 constant = parseVariable("Expected Parameter Name");
+            defineVariable(constant);
+        } while(match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RIGHT_PAREN, "Expected a ')' after a function declaration has ended.");
+    consume(TOKEN_LEFT_BRACE, "Expected a '{' before function body.");
+
+    // compile the function. this function also consumes the ending close brace.
+    block();
+
+    // return the currently runnign function object so that it can be pushed on to the constants array of the
+    // caller's function chunk (i.e. the function of the current 'compiler').
+    ObjFunction *function = endCompiler();
+    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL((Obj *)function)));
+}
+
+static void
+functionDeclaration()
+{
+    // index into the constant's array of the current code chunk where the function name string is stored.
+    // function 'variables' are first-class values meaning they are global variables.
+    u8 global = parseVariable("Expected function name");
+    // giving the function variable a non-negative scope depth so that it is assumed to be initialized and not
+    // generate errors when assigning to another variable.
+    markInitialized();
+    // compile function's code and put the function object on top of the stack.
+    function(TYPE_FUNCTION_USER_DEFINED);
+    // the above function object(which is put on top of the stack) should be stored back to the function variable
+    // we created above.
+    defineVariable(global);
 }
 
 // variable declaration parsing begins here.
@@ -1152,7 +1247,9 @@ static void
 declaration()
 {
     // if we match a var declaration, we jump to parsing variable declarations.
-    if (match(TOKEN_VAR)) {
+    if (match(TOKEN_FUN)) {
+        functionDeclaration();
+    } else if (match(TOKEN_VAR)) {
         varDeclaration();
     } else {
         statement();
@@ -1176,7 +1273,7 @@ compile(const char *source)
 
     // Initialize the compiler from an empty state.
     Compiler compiler;
-    initCompiler(&compiler, TYPE_SCRIPT);
+    initCompiler(&compiler, TYPE_FUNCTION_MAIN);
 
     compilingChunk = &compiler.function->chunk;
 
