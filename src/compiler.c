@@ -123,6 +123,7 @@ static void string(bool canAssign);
 static void variable(bool canAssign);
 static void and_(bool canAssign);
 static void or_(bool canAssign);
+static void call(bool canAssign);
 
 // Blocks can contain declarations, and control flow statements can contain other statements. That means that these
 // two functions will eventually be recursive. Hence, forward declaring them here.
@@ -130,7 +131,7 @@ static void statement();
 static void declaration();
 
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+  [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -324,6 +325,8 @@ emitJump(u8 instruction)
 static void
 emitReturn()
 {
+    // return nil by default from a function which has no return statement.
+    emitByte(OP_NIL);
     emitByte(OP_RETURN);
 }
 
@@ -401,7 +404,10 @@ initCompiler(Compiler *compiler, FunctionType funcType)
 static ObjFunction *
 endCompiler()
 {
-    emitReturn();
+    // Check if a return was already mentioned.
+    if (currentChunk()->code[currentChunk()->count - 1] != OP_RETURN) {
+        emitReturn();
+    }
     ObjFunction *function = current->function;
 
 #ifdef DEBUG_PRINT_CODE
@@ -447,64 +453,6 @@ endScope()
     _assert(popCount <= UINT8_COUNT);
 
     emitBytes(OP_POPN, (u8)popCount);
-}
-
-static void
-binary(bool canAssign)
-{
-    TokenType previousTokenOperatorType = parser.previous.type;
-    ParseRule *rule = getRule(previousTokenOperatorType);
-
-    // NOTE: if the expression is 1+2+3+4. After we see the first '+'
-    // we only want the '2' after it, not the other ones coming after it.
-    // I.E. we want to calculate it as (((1+2)+3)+4).
-    // NOTE: When we call parsePrecedence, we want to compile the expression
-    // for infix (not prefix) operators with precedence higher or equal to the one passed in.
-    // In this example, if we have 1+2+3+4. if current is at 2 and previous is '+'
-    // then parse precedence will advance with current at '+' and prev at 2. If will execute
-    // number() to push the 2 onto the stack and the infix for the next '+'(before the 3)
-    // will not execute since the '+' has the same precedence as rule->precedence here in
-    // this function, and since we passed in the '+'s precedence + 1 to parsePrecedence
-    // the '+' before the 3 will not execute for infix in parsePrecedence function will NOT
-    // execute so we will return here and push the '+' operator here. Since the two numbers
-    // 1 and 2 are already pushed to stack with the third thing pushed is the '+', the
-    // parser correctly calculates 1+2 before proceeding 3 and 4 later.
-    parseExpressionWithPrecedence((Precedence)rule->precedence + 1);
-    // IMPORTANT: The above call to parsePrecedence is to evaluate the right hand
-    // side of the binary operator.
-
-    // After evaluating the right hand side of the bianry operation, NOW, we emit the bytecode instructor for the
-    // binary operator.
-    switch(previousTokenOperatorType)
-    {
-
-        case TOKEN_NOT_EQUAL:       { emitByte(OP_NOT_EQUAL); }     break;
-        case TOKEN_EQUAL_EQUAL:     { emitByte(OP_EQUAL); }         break;
-        case TOKEN_GREATER:         { emitByte(OP_GREATER); }       break;
-        case TOKEN_GREATER_EQUAL:   { emitByte(OP_GREATER_EQUAL); } break;
-        case TOKEN_LESS:            { emitByte(OP_LESS); }          break;
-        case TOKEN_LESS_EQUAL:      { emitByte(OP_LESS_EQUAL); }    break;
-
-        case TOKEN_PLUS:            { emitByte(OP_ADD);      }      break;
-        case TOKEN_MINUS:           { emitByte(OP_SUBTRACT); }      break;
-        case TOKEN_STAR:            { emitByte(OP_MULTIPLY); }      break;
-        case TOKEN_SLASH:           { emitByte(OP_DIVIDE);   }      break;
-        default: return;
-    }
-}
-
-static void
-grouping(bool canAssign)
-{
-    expression();
-    consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
-}
-
-static void
-number(bool canAssign)
-{
-    double value = strtod(parser.previous.start, NULL);
-    emitConstant(NUMBER_VAL(value));
 }
 
 static void
@@ -729,6 +677,97 @@ defineVariable(u8 global)
     }
 
     emitBytes(OP_DEFINE_GLOBAL, global);
+}
+
+static u8
+argumentList()
+{
+    u8 argCount = 0;
+    if (!check(TOKEN_RIGHT_PAREN)) {
+        do {
+            // Put the parameter on the stack.
+            expression();
+            if (argCount == 255) {
+                error("Cannot have more than 255 arguments.");
+            }
+            argCount++;
+        } while (match(TOKEN_COMMA));
+    }
+
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments.");
+    return argCount;
+}
+
+static void
+binary(bool canAssign)
+{
+    TokenType previousTokenOperatorType = parser.previous.type;
+    ParseRule *rule = getRule(previousTokenOperatorType);
+
+    // NOTE: if the expression is 1+2+3+4. After we see the first '+'
+    // we only want the '2' after it, not the other ones coming after it.
+    // I.E. we want to calculate it as (((1+2)+3)+4).
+    // NOTE: When we call parsePrecedence, we want to compile the expression
+    // for infix (not prefix) operators with precedence higher or equal to the one passed in.
+    // In this example, if we have 1+2+3+4. if current is at 2 and previous is '+'
+    // then parse precedence will advance with current at '+' and prev at 2. If will execute
+    // number() to push the 2 onto the stack and the infix for the next '+'(before the 3)
+    // will not execute since the '+' has the same precedence as rule->precedence here in
+    // this function, and since we passed in the '+'s precedence + 1 to parsePrecedence
+    // the '+' before the 3 will not execute for infix in parsePrecedence function will NOT
+    // execute so we will return here and push the '+' operator here. Since the two numbers
+    // 1 and 2 are already pushed to stack with the third thing pushed is the '+', the
+    // parser correctly calculates 1+2 before proceeding 3 and 4 later.
+    parseExpressionWithPrecedence((Precedence)rule->precedence + 1);
+    // IMPORTANT: The above call to parsePrecedence is to evaluate the right hand
+    // side of the binary operator.
+
+    // After evaluating the right hand side of the bianry operation, NOW, we emit the bytecode instructor for the
+    // binary operator.
+    switch(previousTokenOperatorType)
+    {
+
+        case TOKEN_NOT_EQUAL:       { emitByte(OP_NOT_EQUAL); }     break;
+        case TOKEN_EQUAL_EQUAL:     { emitByte(OP_EQUAL); }         break;
+        case TOKEN_GREATER:         { emitByte(OP_GREATER); }       break;
+        case TOKEN_GREATER_EQUAL:   { emitByte(OP_GREATER_EQUAL); } break;
+        case TOKEN_LESS:            { emitByte(OP_LESS); }          break;
+        case TOKEN_LESS_EQUAL:      { emitByte(OP_LESS_EQUAL); }    break;
+
+        case TOKEN_PLUS:            { emitByte(OP_ADD);      }      break;
+        case TOKEN_MINUS:           { emitByte(OP_SUBTRACT); }      break;
+        case TOKEN_STAR:            { emitByte(OP_MULTIPLY); }      break;
+        case TOKEN_SLASH:           { emitByte(OP_DIVIDE);   }      break;
+        default: return;
+    }
+}
+
+// This is the infix operator for the left_paren '(' which gets called when there is a function call detected in
+// the code. The left expression is an identifier, right is the identifier for the arguments.
+//
+// '(' is also an unary operator since it comes first. For ex: (1+2), '(' gets evaluated first, therefore its unary
+// operator 'grouping()' is called.
+static void
+call(bool canAssign)
+{
+    u8 argCount = argumentList();
+    // emit an OP_CALL instruction to invoke the function call.
+    // all parameters of the function are already on the stack due to the above instruction.
+    emitBytes(OP_CALL, argCount);
+}
+
+static void
+grouping(bool canAssign)
+{
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+}
+
+static void
+number(bool canAssign)
+{
+    double value = strtod(parser.previous.start, NULL);
+    emitConstant(NUMBER_VAL(value));
 }
 
 // The and operator evaluates to true if both its left hand and right hand expressions are true.
@@ -1155,6 +1194,25 @@ printStatement()
     emitByte(OP_PRINT);
 }
 
+static void
+returnStatement()
+{
+    if (current->type == TYPE_FUNCTION_MAIN) {
+        error("Cannot return from the implicit main function");
+    }
+
+    // return keyword is optional. In it's absence an OP_NIL is returned.
+    if (match(TOKEN_SEMICOLON)) {
+        emitReturn();
+    } else  {
+        // in case there is an explicit value to be returned by the callee back to the caller.
+        // expression parses it and places it on top of the stack.
+        expression();
+        consume(TOKEN_SEMICOLON, "Expected a ';' after the return statement");
+        emitByte(OP_RETURN);
+    }
+}
+
 // difference between while and if here is just the loop instruction, otherwise, its all the same.
 // Control Flow:
 // 1. Condition Expression          { Condition expression after the while statement }
@@ -1199,6 +1257,9 @@ statement()
         forStatement();
     } else if (match(TOKEN_IF)) {
         ifStatement();
+    } else if (match(TOKEN_RETURN)) {
+        // return statement(to return a value back to the caller function(?))
+        returnStatement();
     } else if (match(TOKEN_WHILE)) {
         whileStatement();
     } else if (match(TOKEN_LEFT_BRACE)) {

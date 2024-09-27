@@ -26,7 +26,10 @@ typedef struct {
     ///        return from a function, The VM will jump to the ip of the caller's CallFrame.
     u8 *ip;
 
-    /// @brief Points to the location in the VM's stack where the first local variable in the function begins.
+    /// @brief Points to the location in the VM's stack where the function actually begins.
+    ///        The 0th slot when a function begins is the function object itself. slot 0 is reserved for the
+    ///        function object always. the arguments(if any) and local variables used inside the function are
+    ///        stored from slot index 1.
     Value *slots;
 } CallFrame;
 

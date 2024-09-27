@@ -10,6 +10,8 @@
 #include "vm.h"
 
 VM vm;
+static bool callValue(Value callee, int argCount);
+static bool call(ObjFunction *function, int argCount);
 
 static bool
 isFalsey(Value value)
@@ -54,17 +56,26 @@ runtimeError(const char *format, ...)
     va_end(args);
     fputs("\n", stderr);
 
-    // get the topmost frame from the callframe stack.
-    CallFrame *frame = &vm.frames[vm.frameCount - 1];
-    size_t instruction = frame->ip - frame->function->chunk.code - 1;
-    int line = frame->function->chunk.lines.values[instruction].line;
-    fprintf(stderr, "[line %d] in script\n", line);
-    resetStack();
+    // print stack trace from top(most recently called function) to bottom (the implicit main function)
+    for (int i = vm.frameCount - 1; i >= 0; i--) {
+        CallFrame *frame = &vm.frames[i];
+        ObjFunction *function = frame->function;
+        size_t instruction = frame->ip - function->chunk.code - 1;
+        fprintf(stderr, "[line: %d] in ", function->chunk.lines.values[instruction].line);
+        if (function->name == NULL) {
+            fprintf(stderr, "main\n");
+        } else {
+            fprintf(stderr, "%s()\n", function->name->chars);
+        }
+    }
 }
 
 static InterpretResult
 run()
 {
+    // Current function frame cached. First time this runs, this always points to the "main" implicit function
+    // because that's the one that is added first when the intrepreter was first run.
+    // At this point we have the string of the implicit function object "main" on the stack
     CallFrame *frame = &vm.frames[vm.frameCount - 1];
 
 #define READ_BYTE() (*frame->ip++)
@@ -114,6 +125,7 @@ run()
         {
             case OP_CONSTANT:
             {
+                // index = read_next_byte; value = currentFunction(inside callFrame)->chunk.constantsArray[index]
                 Value constant = READ_CONSTANT();
                 push(constant);
             } break;
@@ -145,7 +157,10 @@ run()
             case OP_GET_LOCAL:
             {
                 u8 slot = READ_BYTE();
-                // access the given numbered slot relative to the beginning of that frame.
+                // access the given numbered slot relative to the beginning of this frame. the compiler pushed the
+                // locals to the vm's stack in a sequence that the slot index returned here corresponds correctly
+                // to the correct index. both the compiler's locals array indices and vm->stack slots(offset by
+                // where the first slot for the current function) are completely in sync.
                 Value val = frame->slots[slot];
                 if (IS_NIL(val)) {
                     runtimeError("Trying to access an uninitialized variable");
@@ -334,11 +349,46 @@ run()
                 frame->ip -= offset;
             } break;
 
+            case OP_CALL:
+            {
+                // Operand to the OP_CALL is a byte giving how many arguments were sent to the function at runtime.
+                int argCount = READ_BYTE();
+                if (!callValue(peek(argCount), argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                // Since a new function call was invoked, we do "callValue" above, and add a new CallStackFrame
+                // which has the new function object stored in the first 0th slot.
+                // the ip is set to the first code in this new function that should run.
+                // the slots pointer points to the main stack of the vm where the function object exists.
+                // this is how all the instruction offsets inside this new function point to the correct stack
+                // value in the overall vm stack because they are offset by this new function ip to which they
+                // belong .
+                frame = &vm.frames[vm.frameCount - 1];
+            } break;
+
             case OP_RETURN:
             {
-                // Exit the interpreter.
-                return INTERPRET_OK;
-            }
+                // when a function returs, its value will be on top of the stack.
+                Value result = pop();
+                vm.frameCount--;
+                if (vm.frameCount == 0) {
+                    // this is the implicit main function. pop the result of it and exit the interpreter.
+                    pop();
+                    return INTERPRET_OK;
+                }
+
+                // discard the called function's entire stack window (which is by design in the 'slots')
+                // this is where the arguments and local variables of the function begin to appear.
+                // top of the stack ends up right at the beginning of the returning function's stack window.
+                vm.stack.top = frame->slots;
+                // push the return value on to the stack so that it can be used by the caller function.
+                push(result);
+                // point the current frame to the frame one lower than the current called function one.
+                // this frame is of the caller which called the function we just returned from.
+                // the ip in this frame will be pointing to the next instruction in the caller right after the call
+                // to the function we just returned from happened.
+                frame = &vm.frames[vm.frameCount - 1];
+            } break;
         }
     }
 #undef READ_BYTE
@@ -368,15 +418,7 @@ interpret(const char *source)
 
     // store the top level function object(the main function) on the stack.
     push(OBJ_VAL((Obj *)function));
-
-    // Prepare an initial callFrame to execute it's code.
-    CallFrame *frame = &vm.frames[vm.frameCount++];
-    frame->function = function;
-    // the current callFrame's ip points to the first line of code of this top level function returned from the
-    // compiler.
-    frame->ip = function->chunk.code;
-    // the first location in the vm's stack where it's local variables are stored.
-    frame->slots = vm.stack.values;
+    call(function, 0);
 
     // With the main function's Frame set up, we can start executing it's code.
     InterpretResult result = run();
@@ -445,6 +487,51 @@ peek(int indexFromLast)
             vm.stack.count > 0 &&
             vm.stack.count >= (indexFromLast + 1));
     return *((vm.stack.top - 1) - indexFromLast);
+}
+
+static bool
+call(ObjFunction *function, int argCount)
+{
+    // if the runtime argument count is not equal to the number of parameters for the function as it was defined,
+    // then it is a runtime error.
+    if (argCount != function->arity) {
+        runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+        return false;
+    }
+
+    // The max number of nested frames are FRAME_MAX, if we try to add one more nest, thats an error.
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow!");
+        return false;
+    }
+
+    // add a new callStackFrame for this new function which was called from within the current function that the vm
+    // is currently executing.
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->function = function;
+    frame->ip = function->chunk.code;
+    frame->slots = vm.stack.top - argCount - 1;
+    return true;
+}
+
+static bool
+callValue(Value callee, int argCount)
+{
+    if (IS_OBJ(callee)) {
+        switch(OBJ_TYPE(callee)) {
+            case OBJ_FUNCTION:
+            {
+                return call(AS_FUNCTION(callee), argCount);
+            } break;
+
+            default: {
+                _assert(!"Should not be here!");
+            } break;
+        }
+    }
+
+    runtimeError("Can only call functions and classes");
+    return false;
 }
 
 void

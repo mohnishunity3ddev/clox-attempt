@@ -107,6 +107,7 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_JUMP:           { result = jumpInstruction("OP_JUMP", 1, chunk, offset); }               break;
         case OP_JUMP_IF_FALSE:  { result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); }      break;
         case OP_LOOP:           { result = jumpInstruction("OP_LOOP", -1, chunk, offset); }              break;
+        case OP_CALL:           { result = byteInstruction("OP_CALL", chunk, offset); }                  break;
 
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;

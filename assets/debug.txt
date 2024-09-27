@@ -1,5 +1,5 @@
-fun myFunc() {
-    print "Yuhuuu!";
+fun sum(a, b, c) {
+  return a + b + c;
 }
 
-print myFunc;
+print 4 + sum(5, 6, 7);

@@ -52,6 +52,8 @@ typedef enum
     OP_JUMP,
     /// @brief Jump instruction which jumps the code backwards. The offset is given in it's 2 byte operand.
     OP_LOOP,
+    /// @brief instruction to invoke a function call. All the arguments are already placed on the stack.
+    OP_CALL,
 
     /// @brief This op code means return from a function.
     OP_RETURN,
