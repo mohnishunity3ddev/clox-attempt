@@ -198,11 +198,12 @@ identifierType()
                 {
                     case 'a': return checkKeyword(2, 3, "lse", TOKEN_FALSE);
                     case 'o': return checkKeyword(2, 1, "r", TOKEN_FOR);
-                    case 'u': return checkKeyword(2, 1, "n", TOKEN_FUN);
+                    case 'u': return checkKeyword(2, 2, "nc", TOKEN_FUN);
                 }
             }
         } break;
         case 'i': return checkKeyword(1, 1, "f", TOKEN_IF);
+        case 'l': return checkKeyword(1, 3, "oop", TOKEN_FOR);
         case 'n': return checkKeyword(1, 2, "il", TOKEN_NIL);
         case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
         case 'p': return checkKeyword(1, 4, "rint", TOKEN_PRINT);
@@ -264,6 +265,7 @@ scanToken()
         case '+': return makeToken(TOKEN_PLUS);
         case '/': return makeToken(TOKEN_SLASH);
         case '*': return makeToken(TOKEN_STAR);
+        case '%': return makeToken(TOKEN_PERCENTAGE);
         case '!': return makeToken(match('=') ? TOKEN_NOT_EQUAL     : TOKEN_NOT     );
         case '=': return makeToken(match('=') ? TOKEN_EQUAL_EQUAL   : TOKEN_EQUAL   );
         case '<': return makeToken(match('=') ? TOKEN_LESS_EQUAL    : TOKEN_LESS    );

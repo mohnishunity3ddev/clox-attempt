@@ -6,7 +6,8 @@
 #include "value.h"
 #include "table.h"
 
-#define FRAMES_MAX 64
+#define FRAMES_MAX 8192*32
+// FIXME: Can't use a dynamic stack right now! :( Check this out.
 #define USE_DYNAMIC_STACK 0
 #if !USE_DYANMIC_STACK
     #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)

@@ -14,17 +14,22 @@ initValueArray(ValueArray *array)
 }
 
 int
-stringValueIndex(ValueArray *array, const char *string)
+stringValueIndex(ValueArray *array, const char *string, int len)
 {
     int result = -1;
     for (int i = 0; i < array->count; ++i)
     {
         Value v = array->values[i];
         if (v.type == VAL_OBJ) {
-            ObjString *sVal = (ObjString *)v.as.obj;
-            if (memcmp(sVal->chars, string, sVal->length) == 0) {
-                result = i;
-                break;
+            Obj *obj = v.as.obj;
+            if (obj->type == OBJ_STRING) {
+                ObjString *sVal = (ObjString *)obj;
+                if ((len == sVal->length) &&
+                    memcmp(sVal->chars, string, sVal->length) == 0)
+                {
+                    result = i;
+                    break;
+                }
             }
         }
     }

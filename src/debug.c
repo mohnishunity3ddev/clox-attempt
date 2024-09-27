@@ -121,7 +121,7 @@ disassembleInstruction(Chunk *chunk, int offset)
 
         case OP_GET_LOCAL:      { result = byteInstruction("OP_GET_LOCAL", chunk, offset);}              break;
         case OP_SET_LOCAL:      { result = byteInstruction("OP_SET_LOCAL", chunk, offset);}              break;
-
+        
         case OP_DEFINE_GLOBAL:  { result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); }     break;
         case OP_GET_GLOBAL:     { result = constantInstruction("OP_GET_GLOBAL", chunk, offset); }        break;
         case OP_SET_GLOBAL:     { result = constantInstruction("OP_SET_GLOBAL", chunk, offset); }        break;

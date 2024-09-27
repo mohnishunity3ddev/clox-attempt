@@ -36,6 +36,7 @@ typedef enum
     PREC_COMPARISON, // < > <= >=
     PREC_TERM,       // + -
     PREC_FACTOR,     // * /
+    PREC_MOD,     // %
     PREC_UNARY,      // ! -
     PREC_CALL,       // . ()
     PREC_PRIMARY
@@ -111,6 +112,7 @@ struct Compiler {
 
 Parser parser;
 Chunk *compilingChunk;
+Chunk *mainFunctionChunk;
 Compiler *current = NULL;
 
 static void binary(bool canAssign);
@@ -139,6 +141,7 @@ ParseRule rules[] = {
   [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
+  [TOKEN_PERCENTAGE]    = {NULL,     binary, PREC_MOD},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
@@ -738,6 +741,7 @@ binary(bool canAssign)
         case TOKEN_MINUS:           { emitByte(OP_SUBTRACT); }      break;
         case TOKEN_STAR:            { emitByte(OP_MULTIPLY); }      break;
         case TOKEN_SLASH:           { emitByte(OP_DIVIDE);   }      break;
+        case TOKEN_PERCENTAGE:      { emitByte(OP_MOD);   }      break;
         default: return;
     }
 }
@@ -893,16 +897,21 @@ namedVariable(Token name, bool canAssign)
         // Get the index into the constants array where the name of the global variable is stored.
         // This will be -1 if the global variable name is not present in the constants array(i.e. it has not been
         // declared yet)
-        arg = stringValueIndex(&currentChunk()->constants, name.start);
+        arg = stringValueIndex(&mainFunctionChunk->constants, name.start, name.length);
         if (arg == -1)
         {
-            // add the name token's lexeme into the constants array and get the index.
-            // NOTE: We are doing this to support users using a variable before it is declared. if the string is not
-            // already in the constants array, then we add a new string constant into the array so that it can be
-            // looked up by the vm's runtime to fetch the value before it is defined and not produce a "undefined
-            // variable" error.
-            // arg = identifierConstant(&name); // NOTE: Not doing this right now.
-            errorAt(&name, "CompilerError (Undefined global variable)");
+            if(check(TOKEN_LEFT_PAREN)) {
+                // NOTE: Could be a native function which the user has not defined explicitly.
+                arg = identifierConstant(&parser.previous);
+            } else {
+                // add the name token's lexeme into the constants array and get the index.
+                // NOTE: We are doing this to support users using a variable before it is declared. if the string is not
+                // already in the constants array, then we add a new string constant into the array so that it can be
+                // looked up by the vm's runtime to fetch the value before it is defined and not produce a "undefined
+                // variable" error.
+                // arg = identifierConstant(&name); // NOTE: Not doing this right now.
+                errorAt(&name, "CompilerError (Undefined global variable)");
+            }
         }
     }
 
@@ -1337,6 +1346,7 @@ compile(const char *source)
     initCompiler(&compiler, TYPE_FUNCTION_MAIN);
 
     compilingChunk = &compiler.function->chunk;
+    mainFunctionChunk = compilingChunk;
 
     parser.hadError  = false;
     parser.panicMode = false;

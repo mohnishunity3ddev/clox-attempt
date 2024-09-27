@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -10,8 +11,21 @@
 #include "vm.h"
 
 VM vm;
+// Native Function
+static Value
+clockNative(int argCount, Value *args)
+{
+    Value result = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+    return result;
+}
+
+
 static bool callValue(Value callee, int argCount);
 static bool call(ObjFunction *function, int argCount);
+CallFrame *mainFrame; // the "main" function frame.
+
+// static Value clockNative(int
+// argCount, Value * )
 
 static bool
 isFalsey(Value value)
@@ -70,6 +84,19 @@ runtimeError(const char *format, ...)
     }
 }
 
+static void
+defineNative(const char *name, NativeFunc function)
+{
+    // push the name of the native function that is used by the user-code.
+    push(OBJ_VAL((Obj *)copyString(name, (int)strlen(name))));
+    // push value of the native function object.
+    push(OBJ_VAL((Obj *)newNative(function)));
+    // Store the name of the function inside the global variables list keyed by its name (as used in user-code).
+    tableSet(&vm.globals, AS_STRING(vm.stack.values[0]), vm.stack.values[1]);
+    pop();
+    pop();
+}
+
 static InterpretResult
 run()
 {
@@ -117,6 +144,8 @@ run()
         printf("\n");
         // Reading the chunk of code from the current function's frame.
         int offset = (int)(frame->ip - frame->function->chunk.code);
+        // FIXME: Globals are always stored in the main chunk. I am sending
+        // in the current frame function chunk. Problematic. Check it out
         disassembleInstruction(&frame->function->chunk, offset);
 #endif
 
@@ -200,7 +229,7 @@ run()
                 // is stored. We retrieve that, and then consult the globals hashtable using the global varName as
                 // key and get the actual value this global variable represents. We did that in the
                 // OP_DEFINE_GLOBALS routine below.
-                ObjString *globalVar = READ_STRING();
+                ObjString *globalVar = ((ObjString *)(((mainFrame->function->chunk.constants.values[(*frame->ip++)])).as.obj));
                 Value value;
                 if (!tableGet(&vm.globals, globalVar, &value))
                 {
@@ -291,7 +320,21 @@ run()
             case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
             case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
             case OP_DIVIDE:     { BINARY_OP(NUMBER_VAL, /); } break;
-
+            case OP_MOD:
+            {
+                do
+                {
+                    if (!((peek(0)).type == VAL_NUMBER) || !((peek(1)).type == VAL_NUMBER))
+                    {
+                        runtimeError("Operands must be numbers.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    u32 b = (u32)((pop()).as.number);
+                    Value opResult = ((Value){VAL_NUMBER, {.number = (u32)((peek(0)).as.number) % b}});
+                    setTop(opResult);
+                } while (0);
+            }
+            break;
             case OP_NOT:
             {
                 Value p = peek(0);
@@ -381,6 +424,8 @@ run()
                 // this is where the arguments and local variables of the function begin to appear.
                 // top of the stack ends up right at the beginning of the returning function's stack window.
                 vm.stack.top = frame->slots;
+                int newCount = (int)(vm.stack.top - vm.stack.values);
+                vm.stack.count = newCount;
                 // push the return value on to the stack so that it can be used by the caller function.
                 push(result);
                 // point the current frame to the frame one lower than the current called function one.
@@ -406,6 +451,8 @@ initVM()
     vm.objects = NULL;
     initTable(&vm.strings);
     initTable(&vm.globals);
+
+    defineNative("clock", clockNative);
 }
 
 InterpretResult
@@ -419,6 +466,7 @@ interpret(const char *source)
     // store the top level function object(the main function) on the stack.
     push(OBJ_VAL((Obj *)function));
     call(function, 0);
+    mainFrame = &vm.frames[0];
 
     // With the main function's Frame set up, we can start executing it's code.
     InterpretResult result = run();
@@ -454,7 +502,10 @@ push(Value value)
         vm.stack.top = vm.stack.values + vm.stack.count;
     }
 #else
-    _assert(vm.stack.count <= STACK_MAX - 1);
+    if (vm.stack.count > STACK_MAX - 1) {
+        _assert(!"Stack Overflow!");
+        exit(99);
+    }
 #endif
 
     *vm.stack.top = value;
@@ -489,6 +540,7 @@ peek(int indexFromLast)
     return *((vm.stack.top - 1) - indexFromLast);
 }
 
+// Create a new stack frame for new function calls.
 static bool
 call(ObjFunction *function, int argCount)
 {
@@ -522,6 +574,15 @@ callValue(Value callee, int argCount)
             case OBJ_FUNCTION:
             {
                 return call(AS_FUNCTION(callee), argCount);
+            } break;
+
+            case OBJ_NATIVE:
+            {
+                NativeFunc native = AS_NATIVE(callee);
+                Value result = native(argCount, vm.stack.top - argCount);
+                vm.stack.top -= argCount + 1;
+                push(result);
+                return true;
             } break;
 
             default: {

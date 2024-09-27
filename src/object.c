@@ -58,6 +58,14 @@ newFunction()
     return function;
 }
 
+ObjNative *
+newNative(NativeFunc function)
+{
+    ObjNative *native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+    native->function = function;
+    return native;
+}
+
 ObjString *
 takeString(char *chars, int length)
 {
@@ -127,6 +135,11 @@ printObject(Value value)
         case OBJ_FUNCTION:
         {
             printFunction(AS_FUNCTION(value));
+        } break;
+
+        case OBJ_NATIVE:
+        {
+            printf("<native function>");
         } break;
 
         case OBJ_STRING:

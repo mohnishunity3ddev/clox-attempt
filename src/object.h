@@ -9,13 +9,16 @@
 
 #define IS_STRING(value)  isObjType(value, OBJ_STRING)
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
+#define IS_NATIVE(value)  isObjType(value, OBJ_NATIVE)
 
 #define AS_STRING(value)  ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
+#define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
 
 typedef enum {
     OBJ_FUNCTION,
+    OBJ_NATIVE,
     OBJ_STRING,
 } ObjType;
 
@@ -44,6 +47,14 @@ typedef struct {
     ObjString *name;
 } ObjFunction;
 
+// NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
+// execute directly in C in VM. For example - sqrtf, atan2, clock etc.
+typedef Value (*NativeFunc)(int argCount, Value *args);
+typedef struct {
+    Obj obj;
+    NativeFunc function;
+} ObjNative;
+
 static inline bool
 isObjType(Value value, ObjType type)
 {
@@ -54,6 +65,11 @@ isObjType(Value value, ObjType type)
 /// @brief helper function to create a new function
 /// @return a ObjFunction * pointer describing the function.
 ObjFunction *newFunction();
+
+/// @brief creates a new native function object.
+/// @param function pointer to the actual native function
+/// @return
+ObjNative *newNative(NativeFunc function);
 
 /// @brief Take ownership of the string passed in.
 /// @param chars character array of the string
