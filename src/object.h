@@ -19,6 +19,7 @@
 #define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
 
 typedef enum {
+    OBJ_UPVALUE,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
     OBJ_NATIVE,
@@ -53,10 +54,25 @@ typedef struct {
     ObjString *name;
 } ObjFunction;
 
+/// @brief runtime representation of upvalues.
+///        upvalues manage closed over variables in a nested function which have been thrown away when the parent
+///        functions that they are declared in return after executing. So, upvalues should be on the heap.
+typedef struct {
+    /// @brief  obj header
+    Obj obj;
+    /// @brief points to the closed-over variable. when the closed-over variables gets assigned a new value, then
+    ///        we get to know since this points to the variable not a copy of the variable.
+    Value *location;
+} ObjUpvalue;
+
 /// @brief runtime wrappers for functions.
 typedef struct {
     Obj obj;
     ObjFunction *function;
+    /// @brief  array of upvalues that the closure holds on to.
+    ///         different closures will have different number of upvalues, so we need a dynamic array.
+    ObjUpvalue **upvalues;
+    int upvalueCount;
 } ObjClosure;
 
 // NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
@@ -73,6 +89,12 @@ isObjType(Value value, ObjType type)
     bool result = IS_OBJ(value) && AS_OBJ(value)->type == type;
     return result;
 }
+
+/// @brief creates a new upvalue object.
+/// @param slot address of the slot where the closed-over variable lives. slot is the location on the stack where
+///             the local variable to an enclosing function lives.
+/// @return
+ObjUpvalue *newUpvalue(Value *slot);
 
 ObjClosure *newClosure(ObjFunction *function);
 

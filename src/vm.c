@@ -22,7 +22,11 @@ clockNative(int argCount, Value *args)
 
 static bool callValue(Value callee, int argCount);
 static bool call(ObjClosure *closure, int argCount);
-CallFrame *mainFrame; // the "main" function frame.
+static ObjUpvalue *captureUpvalue(Value *local);
+
+CallFrame *mainFrame; // the "main"
+                      // function
+                      // frame.
 
 // static Value clockNative(int
 // argCount, Value * )
@@ -171,6 +175,17 @@ run()
             {
                 u8 popCount = READ_BYTE();
                 popN(popCount);
+            } break;
+
+            case OP_GET_UPVALUE:
+            {
+                u8 slot = READ_BYTE();
+                push(*frame->closure->upvalues[slot]->location);
+            } break;
+            case OP_SET_UPVALUE:
+            {
+                u8 slot = READ_BYTE();
+                *frame->closure->upvalues[slot]->location = peek(0);
             } break;
 
             // Global variables are stored in the VM's hashtable. The operand for 'GET' and 'SET' instructions
@@ -417,6 +432,27 @@ run()
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT());
                 ObjClosure *closure = newClosure(function);
                 push(OBJ_VAL((Obj *)closure));
+                // walk through all of the OP_CLOSURE operands to see where where each upvalue is located.
+                for (int i = 0; i < closure->upvalueCount; ++i) {
+                    u8 isLocal = READ_BYTE();
+                    u8 index = READ_BYTE();
+                    if (isLocal) {
+                        // Closing over a local variable is more interesting. Most of the work happens in a
+                        // separate function, but first we calculate the argument to pass to it. We need to grab a
+                        // pointer to the captured local’s slot in the surrounding function’s stack window. That
+                        // window begins at frame->slots, which points to slot zero. Adding index offsets that to
+                        // the local slot we want to capture. We pass that pointer here.
+                        closure->upvalues[i] = captureUpvalue(frame->slots + index);
+                    } else {
+                        // An OP_CLOSURE instruction is emitted at the end of a function declaration. At the moment
+                        // that we are executing that declaration, the current function is the surrounding one.
+                        // That means the current function’s closure is stored in the CallFrame at the top of the
+                        // callstack. So, to grab an upvalue from the enclosing function, we can read it right from
+                        // the frame local variable, which caches a reference to that CallFrame
+                        closure->upvalues[i] = frame->closure->upvalues[i];
+                    }
+                }
+                // By the end of this instruction, we have an array full of upvalues pointing to variables.
             } break;
 
             case OP_RETURN:
@@ -608,6 +644,13 @@ callValue(Value callee, int argCount)
 
     runtimeError("Can only call functions and classes");
     return false;
+}
+
+static ObjUpvalue *
+captureUpvalue(Value *local)
+{
+    ObjUpvalue *createdUpvalue = newUpvalue(local);
+    return createdUpvalue;
 }
 
 void

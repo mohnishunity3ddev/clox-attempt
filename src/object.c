@@ -47,11 +47,27 @@ allocateStringObject(char *chars, int length, u32 hash)
     return string;
 }
 
+ObjUpvalue *
+newUpvalue(Value *slot)
+{
+    ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+    upvalue->location = slot;
+    return upvalue;
+}
+
 ObjClosure *
 newClosure(ObjFunction *function)
 {
-    ObjClosure *closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
-    closure->function = function;
+    ObjUpvalue **upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
+    for (int i = 0; i < function->upvalueCount; ++i)
+    {
+        upvalues[i] = NULL;
+    }
+
+    ObjClosure *closure     = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+    closure->function       = function;
+    closure->upvalues       = upvalues;
+    closure->upvalueCount   = function->upvalueCount;
     return closure;
 }
 
@@ -141,9 +157,10 @@ printObject(Value value)
 {
     switch(OBJ_TYPE(value))
     {
+        case OBJ_UPVALUE:   { printf("upvalue"); }                          break;
         case OBJ_CLOSURE:   { printFunction(AS_CLOSURE(value)->function); } break;
-        case OBJ_FUNCTION:  { printFunction(AS_FUNCTION(value)); } break;
-        case OBJ_NATIVE:    { printf("<native function>"); } break;
+        case OBJ_FUNCTION:  { printFunction(AS_FUNCTION(value)); }          break;
+        case OBJ_NATIVE:    { printf("<native function>"); }                break;
 
         case OBJ_STRING:
         {

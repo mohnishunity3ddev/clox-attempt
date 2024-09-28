@@ -5,10 +5,9 @@
 //   }
 //   return closure;
 // }
-//
 // var closure = makeClosure();
 // closure();
-
+//
 //
 // func makeClosure(value) {
 //   func closure() {
@@ -16,7 +15,6 @@
 //   }
 //   return closure;
 // }
-//
 // var doughnut = makeClosure("doughnut");
 // var bagel = makeClosure("bagel");
 // doughnut();
@@ -25,32 +23,39 @@
 //
 // func outer() {
 //   var x = "value";
-//
 //   func middle() {
 //     func inner() {
 //       print x;
 //     }
-//
 //     print "create inner closure";
 //     return inner;
 //   }
-//
 //   print "return from outer";
 //   return middle;
 // }
-//
 // var mid = outer();
 // var in = mid();
 // in();
+//
+//
+// fun outer() {
+//   var a = 1;
+//   var b = 2;
+//   fun middle() {
+//     var c = 3;
+//     var d = 4;
+//     fun inner() {
+//       print a + c + b + d;
+//     }
+//   }
+// }
 
 fun outer() {
-  var a = 1;
-  var b = 2;
-  fun middle() {
-    var c = 3;
-    var d = 4;
+    var x = "outer";
     fun inner() {
-      print a + c + b + d;
+        print x;
     }
-  }
+
+    inner();
 }
+outer();

@@ -409,6 +409,8 @@ initCompiler(Compiler *compiler, FunctionType funcType)
         current->function->name = copyString(parser.previous.start, parser.previous.length);
     }
 
+    // the first "local" is reserved to for the function. It is null. is just meant to signifyt start of a
+    // function.
     Local *local = &current->locals[current->localCount++];
     local->depth = 0;
     local->name.start = "";
@@ -583,8 +585,8 @@ resolveLocal(Compiler *compiler, Token *name)
 /// @brief Add an upvalue to the current function's upvalue array. Upvalues are basically referring to local
 ///        variables declared inside the passed in function's parent/enclosing function.
 /// @param compiler the function compiler of the currently executing function compiler.
-/// @param index index of the local in the local's array of the enclosing function of the current function
-///              compiler.
+/// @param localVarIndex index of the local in the local's array of the enclosing function of the current function
+///                      compiler.
 /// @param isLocal is the variable being closed over by the current function declared in the immediate parent of
 ///                this function. if yes, then this is true. false if the variable being closed over is declared
 ///                beyond the immediate enclosing function.
@@ -1157,7 +1159,7 @@ varDeclaration()
     consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
 
     // IMPORTANT: NOTE:
-    // When we get here, the name of the variable is stored in the constants array(if its a global variable). The
+    // When we get here, the name of the variable is stored in the constants array. The
     // index of which is this 'global' variable here. The value it stores inside of it is also pushed into the
     // chunk already. So the OP_CONSTANT comes before this OP_GLOBAL_DEFINE instruction (followed by the name of
     // the variable) which is the value this var represents. We do this so that when the VM encounters the
@@ -1479,7 +1481,7 @@ compile(const char *source)
     while(!match(TOKEN_EOF)) {
         declaration();
     }
-
+    
     ObjFunction *function = endCompiler();
     return parser.hadError ? NULL : function;
 }

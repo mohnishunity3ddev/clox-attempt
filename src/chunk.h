@@ -24,6 +24,8 @@ typedef enum
     OP_DEFINE_GLOBAL,
     OP_GET_LOCAL,
     OP_GET_GLOBAL,
+    /// @brief  used when we want to access an upvalue variable referenced inside a closure. One byte operand tells
+    ///         the index in the closure's upvalue array.
     OP_GET_UPVALUE,
     OP_SET_LOCAL,
     OP_SET_GLOBAL,
@@ -57,8 +59,8 @@ typedef enum
     OP_LOOP,
     /// @brief instruction to invoke a function call. All the arguments are already placed on the stack.
     OP_CALL,
-    /// @brief used for closures, one byte operand to get the index into the constant table of the chunk for the
-    /// function.
+    /// @brief emitted whenever the code sees a function, which parses the whole thing and then emits this
+    /// instruction. one byte operand returns an index into value array having the function object.
     OP_CLOSURE,
 
     /// @brief This op code means return from a function.
