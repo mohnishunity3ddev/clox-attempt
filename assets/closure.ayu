@@ -50,12 +50,25 @@
 //   }
 // }
 
-fun outer() {
-    var x = "outer";
-    fun inner() {
-        print x;
-    }
+// var globalSet;
+// var globalGet;
+//
+// fun ex() {
+//   var a = "initial";
+//
+//   fun set() { a = "updated"; }
+//   fun get() { print a; }
+//
+//   globalSet = set;
+//   globalGet = get;
+// }
+//
+// ex();
+// globalSet();
+// globalGet();
 
-    inner();
+fun sum(a, b, c) {
+    return a+b+c;
 }
-outer();
+
+print sum(3, 4, 5);

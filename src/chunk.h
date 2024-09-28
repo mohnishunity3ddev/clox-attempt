@@ -21,7 +21,11 @@ typedef enum
     /// @brief instruction to pop N elements from the stack at once. has an operand telling how many items to pop
     /// from the vm's stack.
     OP_POPN,
+    /// @brief operand is 1 byte index into the globals index to get the string name of the global which is sent
+    /// into a hashtable keyed by the string. The value set is already on the stack of the runtime vm.
     OP_DEFINE_GLOBAL,
+    /// @brief 1 byte operand which is the index into the stack slots. All locals are there on the current call
+    /// frame stack slot.
     OP_GET_LOCAL,
     OP_GET_GLOBAL,
     /// @brief  used when we want to access an upvalue variable referenced inside a closure. One byte operand tells
@@ -48,7 +52,6 @@ typedef enum
     OP_NEGATE,
     /// @brief OpCode to print the result onto the screen.
     OP_PRINT,
-
     /// @brief Jump instruction for an if statement. Has a 2 byte operand telling how many bytes of code to skip
     ///        (of the 'then' clause) if the 'if' condition was false
     OP_JUMP_IF_FALSE,
@@ -62,7 +65,6 @@ typedef enum
     /// @brief emitted whenever the code sees a function, which parses the whole thing and then emits this
     /// instruction. one byte operand returns an index into value array having the function object.
     OP_CLOSURE,
-
     /// @brief This op code means return from a function.
     OP_RETURN,
 } OpCode;

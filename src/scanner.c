@@ -119,8 +119,6 @@ string()
 {
     while (peek() != '"' && !isAtEnd())
     {
-        // NOTE: Uncomment this for multiline strings.
-        // if (peek() == '\n') scanner.line++;
         advance();
     }
 
@@ -180,8 +178,6 @@ checkKeyword(int start, int length, const char *rest, TokenType type)
 static TokenType
 identifierType()
 {
-    // NOTE: The scanner has already gone past the current word. so scanner.current has gone past the whole
-    // identifier and scanner.start is at the start of the current identifer.
     switch(scanner.start[0])
     {
         case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);

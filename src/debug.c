@@ -39,9 +39,9 @@ constantInstruction(const char *name, Chunk *chunk, int offset)
     u8 index = chunk->code[offset + 1];
     printf("%-16s %4d '", name, index);
     printValue(chunk->constants.values[index]);
-    printf("'\n");
+    printf("'   | [constant index] : [actual value].\n");
 
-    // One for the instruction identifier is OP_CONSTANT and 1 byte for the actual 1 byte constant value.
+
     return offset + 2;
 }
 
@@ -56,7 +56,7 @@ constantLongInstruction(const char *name, Chunk *chunk, int offset)
     printValue(chunk->constants.values[index]);
     printf("'\n");
 
-    // One for the instruction identifier is OP_CONSTANT and 1 byte for the actual 1 byte constant value.
+
     return offset + 4;
 }
 
@@ -71,10 +71,10 @@ byteInstruction(const char *name, Chunk *chunk, int offset)
 static int
 jumpInstruction(const char *name, int sign, Chunk *chunk, int offset)
 {
-    // The jump instruction operand is a 2 byte blob telling us how much code to skip over.
+
     u16 jump = (u16)(chunk->code[offset + 1] << 8);
     jump |= chunk->code[offset + 2];
-    // print out where does the code jump to.
+
     printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
     return offset + 3;
 }
@@ -115,14 +115,14 @@ disassembleInstruction(Chunk *chunk, int offset)
             u8 constant = chunk->code[offset++];
             printf("%-16s %4d ", "OP_CLOSURE", constant);
             printValue(chunk->constants.values[constant]);
-            printf("\n");
+            printf(" | [constant index] : [closure name]\n");
 
             ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant]);
             for (int j = 0; j < function->upvalueCount; ++j)
             {
                 int isLocal = chunk->code[offset++];
                 int index = chunk->code[offset++];
-                printf("%04d    |                     %s %d\n",
+                printf("%04d    |                     %s %d | [local/upvalue] : [index into locals array of enclosing function]\n",
                        offset - 2, isLocal ? "local" : "upvalue", index);
             }
             result = offset;
