@@ -51,7 +51,6 @@ typedef struct {
 } Local;
 
 typedef struct {
-    // index in function's upvalue array where the local variable in some enclosing function is being closed over
     u8 index;
     bool isLocal;
 } Upvalue;
@@ -454,7 +453,7 @@ resolveUpvalue(Compiler *compiler, Token *name)
     if (local != -1) {
         return addUpvalue(compiler, (u8)local, true);
     }
-    // If a variable getting accessed inside the current nested function is not declared in the current function's
+
     int upvalue = resolveUpvalue(compiler->enclosing, name);
     if (upvalue != -1) {
         return addUpvalue(compiler, (u8)upvalue, false);

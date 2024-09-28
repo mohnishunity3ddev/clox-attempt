@@ -87,8 +87,8 @@ defineNative(const char *name, NativeFunc function)
 static InterpretResult
 run()
 {
-    // because that's the one that is added first when the intrepreter was first run.
     CallFrame *frame = &vm.frames[vm.frameCount - 1];
+
 #define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() \
     (frame->ip += 2, (u16)((frame->ip[-2] << 8) | frame->ip[-1]))
@@ -324,7 +324,7 @@ run()
                 u16 offset = READ_SHORT();
                 frame->ip -= offset;
             } break;
-            
+
             case OP_CALL:
             {
                 int argCount = READ_BYTE();
@@ -483,6 +483,7 @@ call(ObjClosure *closure, int argCount)
     frame->slots = vm.stack.top - argCount - 1;
     return true;
 }
+
 static bool
 callValue(Value callee, int argCount)
 {
@@ -508,12 +509,14 @@ callValue(Value callee, int argCount)
     runtimeError("Can only call functions and classes");
     return false;
 }
+
 static ObjUpvalue *
 captureUpvalue(Value *local)
 {
     ObjUpvalue *createdUpvalue = newUpvalue(local);
     return createdUpvalue;
 }
+
 void
 setTop(Value value)
 {

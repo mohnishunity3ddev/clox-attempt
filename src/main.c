@@ -17,7 +17,6 @@ repl()
 
     for (;;) {
         printf("> ");
-        // read a line of text max characters 1024 until a '\n' is encountered.
         if (!fgets(line, sizeof(line), stdin)) {
             printf("\n");
             break;
