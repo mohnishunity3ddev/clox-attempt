@@ -60,18 +60,12 @@ typedef enum {
     TYPE_FUNCTION_MAIN,
 } FunctionType;
 
-///        stores data like which slots are owned by which local variables. how many blocks of nesting we're
 struct Compiler {
-    ///        As we compile the function's body in the 'functionDeclaration()' function, all of the functions that
-    ///        emit bytecode write to the chunk owned by the new Compiler's function. When we finish the current
-    ///        "callee" function's compilation ended. How do we set the current compiler pointer back to the caller
-    ///        function? For that we have a linked list and this variable stores a pointer to the function's caller
     Compiler *enclosing;
     ObjFunction *function;
     FunctionType type;
     Local locals[UINT8_COUNT];
     int localCount;
-    /// @brief the array which stores the local variables in the function compiler's enclosing/parent function.
     Upvalue upvalues[UINT8_COUNT];
     int scopeDepth;
 };
@@ -149,7 +143,6 @@ static void expression();
 static ParseRule *getRule(TokenType type);
 static void parseExpressionWithPrecedence(Precedence precedence);
 
-/// @brief get the current function's chunk whose code the compiler is compiling.
 static Chunk *
 currentChunk()
 {
@@ -316,7 +309,6 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->name.length = 0;
 }
 
-/// @return The pointer to the currently running function's object where we are returning from.
 static ObjFunction *
 endCompiler()
 {
@@ -418,10 +410,6 @@ resolveLocal(Compiler *compiler, Token *name)
     return result;
 }
 
-/// @brief Add an upvalue to the current function's upvalue array. Upvalues are basically referring to local
-///        variables declared inside the passed in function's parent/enclosing function.
-/// @param localVarIndex index of the local in the local's array of the enclosing function of the current function
-/// @return returns the index into function's upvalue array where the new upvalue was created for the local
 static int
 addUpvalue(Compiler *compiler, u8 localVarIndex, bool isLocal)
 {
@@ -442,8 +430,6 @@ addUpvalue(Compiler *compiler, u8 localVarIndex, bool isLocal)
     return compiler->function->upvalueCount++;
 }
 
-///        used inside the passed in function's enclosing/parenting function.
-/// @return returns the index into function's upvalue array where the new upvalue was created for the local
 static int
 resolveUpvalue(Compiler *compiler, Token *name)
 {

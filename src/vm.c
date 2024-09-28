@@ -505,7 +505,7 @@ callValue(Value callee, int argCount)
                 push(result);
                 return true;
             } break;
-            
+
             default: {
                 _assert(!"Should not be here!");
             } break;
