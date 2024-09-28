@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceRoot}/bin/src/clox.exe",
-            "args": ["fibonacci.ayu"],
+            "args": ["closure.ayu"],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}/assets",
             "environment": [],

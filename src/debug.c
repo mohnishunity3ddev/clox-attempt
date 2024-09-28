@@ -108,6 +108,15 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_JUMP_IF_FALSE:  { result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); }      break;
         case OP_LOOP:           { result = jumpInstruction("OP_LOOP", -1, chunk, offset); }              break;
         case OP_CALL:           { result = byteInstruction("OP_CALL", chunk, offset); }                  break;
+        case OP_CLOSURE:
+        {
+            offset++;
+            u8 constant = chunk->code[offset++];
+            printf("%16s %4d ", "OP_CLOSURE", constant);
+            printValue(chunk->constants.values[constant]);
+            printf("\n");
+            result = offset;
+        } break;
 
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;
@@ -121,7 +130,7 @@ disassembleInstruction(Chunk *chunk, int offset)
 
         case OP_GET_LOCAL:      { result = byteInstruction("OP_GET_LOCAL", chunk, offset);}              break;
         case OP_SET_LOCAL:      { result = byteInstruction("OP_SET_LOCAL", chunk, offset);}              break;
-        
+
         case OP_DEFINE_GLOBAL:  { result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); }     break;
         case OP_GET_GLOBAL:     { result = constantInstruction("OP_GET_GLOBAL", chunk, offset); }        break;
         case OP_SET_GLOBAL:     { result = constantInstruction("OP_SET_GLOBAL", chunk, offset); }        break;

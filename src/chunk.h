@@ -55,6 +55,9 @@ typedef enum
     OP_LOOP,
     /// @brief instruction to invoke a function call. All the arguments are already placed on the stack.
     OP_CALL,
+    /// @brief used for closures, one byte operand to get the index into the constant table of the chunk for the
+    /// function.
+    OP_CLOSURE,
 
     /// @brief This op code means return from a function.
     OP_RETURN,

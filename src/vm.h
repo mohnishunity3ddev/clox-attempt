@@ -21,7 +21,7 @@
 typedef struct {
     /// @brief caller function. which has its bytecode (containing constants and the bytecode itself). Also has the
     /// name of the function currently being executed.
-    ObjFunction *function;
+    ObjClosure *closure;
 
     /// @brief Instead of storing the return address in the callee's frame, caller stores its own ip. When we
     ///        return from a function, The VM will jump to the ip of the caller's CallFrame.

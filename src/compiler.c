@@ -991,7 +991,7 @@ function(FunctionType type)
     // return the currently runnign function object so that it can be pushed on to the constants array of the
     // caller's function chunk (i.e. the function of the current 'compiler').
     ObjFunction *function = endCompiler();
-    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL((Obj *)function)));
+    emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL((Obj *)function)));
 }
 
 static void

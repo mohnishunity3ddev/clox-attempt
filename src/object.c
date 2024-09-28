@@ -47,6 +47,14 @@ allocateStringObject(char *chars, int length, u32 hash)
     return string;
 }
 
+ObjClosure *
+newClosure(ObjFunction *function)
+{
+    ObjClosure *closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+    closure->function = function;
+    return closure;
+}
+
 ObjFunction *
 newFunction()
 {
@@ -132,15 +140,9 @@ printObject(Value value)
 {
     switch(OBJ_TYPE(value))
     {
-        case OBJ_FUNCTION:
-        {
-            printFunction(AS_FUNCTION(value));
-        } break;
-
-        case OBJ_NATIVE:
-        {
-            printf("<native function>");
-        } break;
+        case OBJ_CLOSURE:   { printFunction(AS_CLOSURE(value)->function); } break;
+        case OBJ_FUNCTION:  { printFunction(AS_FUNCTION(value)); } break;
+        case OBJ_NATIVE:    { printf("<native function>"); } break;
 
         case OBJ_STRING:
         {

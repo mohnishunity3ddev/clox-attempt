@@ -9,14 +9,17 @@
 
 #define IS_STRING(value)  isObjType(value, OBJ_STRING)
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
+#define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_NATIVE(value)  isObjType(value, OBJ_NATIVE)
 
 #define AS_STRING(value)  ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
+#define AS_CLOSURE(value) ((ObjClosure *)AS_OBJ(value))
 #define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
 
 typedef enum {
+    OBJ_CLOSURE,
     OBJ_FUNCTION,
     OBJ_NATIVE,
     OBJ_STRING,
@@ -47,6 +50,12 @@ typedef struct {
     ObjString *name;
 } ObjFunction;
 
+/// @brief runtime wrappers for functions.
+typedef struct {
+    Obj obj;
+    ObjFunction *function;
+} ObjClosure;
+
 // NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
 // execute directly in C in VM. For example - sqrtf, atan2, clock etc.
 typedef Value (*NativeFunc)(int argCount, Value *args);
@@ -61,6 +70,8 @@ isObjType(Value value, ObjType type)
     bool result = IS_OBJ(value) && AS_OBJ(value)->type == type;
     return result;
 }
+
+ObjClosure *newClosure(ObjFunction *function);
 
 /// @brief helper function to create a new function
 /// @return a ObjFunction * pointer describing the function.

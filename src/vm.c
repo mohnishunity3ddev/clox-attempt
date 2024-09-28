@@ -21,7 +21,7 @@ clockNative(int argCount, Value *args)
 
 
 static bool callValue(Value callee, int argCount);
-static bool call(ObjFunction *function, int argCount);
+static bool call(ObjClosure *closure, int argCount);
 CallFrame *mainFrame; // the "main" function frame.
 
 // static Value clockNative(int
@@ -73,7 +73,7 @@ runtimeError(const char *format, ...)
     // print stack trace from top(most recently called function) to bottom (the implicit main function)
     for (int i = vm.frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &vm.frames[i];
-        ObjFunction *function = frame->function;
+        ObjFunction *function = frame->closure->function;
         size_t instruction = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line: %d] in ", function->chunk.lines.values[instruction].line);
         if (function->name == NULL) {
@@ -108,7 +108,7 @@ run()
 #define READ_BYTE() (*frame->ip++)
 #define READ_SHORT() \
     (frame->ip += 2, (u16)((frame->ip[-2] << 8) | frame->ip[-1]))
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
@@ -143,10 +143,10 @@ run()
         }
         printf("\n");
         // Reading the chunk of code from the current function's frame.
-        int offset = (int)(frame->ip - frame->function->chunk.code);
+        int offset = (int)(frame->ip - frame->closure->function->chunk.code);
         // FIXME: Globals are always stored in the main chunk. I am sending
         // in the current frame function chunk. Problematic. Check it out
-        disassembleInstruction(&frame->function->chunk, offset);
+        disassembleInstruction(&frame->closure->function->chunk, offset);
 #endif
 
         u8 instruction;
@@ -229,7 +229,8 @@ run()
                 // is stored. We retrieve that, and then consult the globals hashtable using the global varName as
                 // key and get the actual value this global variable represents. We did that in the
                 // OP_DEFINE_GLOBALS routine below.
-                ObjString *globalVar = ((ObjString *)(((mainFrame->function->chunk.constants.values[(*frame->ip++)])).as.obj));
+                ObjString *globalVar =
+                    ((ObjString *)(((mainFrame->closure->function->chunk.constants.values[(*frame->ip++)])).as.obj));
                 Value value;
                 if (!tableGet(&vm.globals, globalVar, &value))
                 {
@@ -405,8 +406,17 @@ run()
                 // the slots pointer points to the main stack of the vm where the function object exists.
                 // this is how all the instruction offsets inside this new function point to the correct stack
                 // value in the overall vm stack because they are offset by this new function ip to which they
-                // belong .
+                // belong.
                 frame = &vm.frames[vm.frameCount - 1];
+            } break;
+
+            case OP_CLOSURE:
+            {
+                // READ_CONSTANT() returns the constant in the constants table where the "value" of the function is
+                // stored (which is an object value of type ObjFunction).
+                ObjFunction *function = AS_FUNCTION(READ_CONSTANT());
+                ObjClosure *closure = newClosure(function);
+                push(OBJ_VAL((Obj *)closure));
             } break;
 
             case OP_RETURN:
@@ -465,7 +475,11 @@ interpret(const char *source)
 
     // store the top level function object(the main function) on the stack.
     push(OBJ_VAL((Obj *)function));
-    call(function, 0);
+    ObjClosure *closure = newClosure(function);
+    // pop the above 'pushed' function. Doing this to make GC aware of heap allocated objects.
+    pop();
+    push(OBJ_VAL(closure));
+    call(closure, 0);
     mainFrame = &vm.frames[0];
 
     // With the main function's Frame set up, we can start executing it's code.
@@ -542,12 +556,13 @@ peek(int indexFromLast)
 
 // Create a new stack frame for new function calls.
 static bool
-call(ObjFunction *function, int argCount)
+call(ObjClosure *closure, int argCount)
 {
     // if the runtime argument count is not equal to the number of parameters for the function as it was defined,
     // then it is a runtime error.
-    if (argCount != function->arity) {
-        runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+    if (argCount != closure->function->arity)
+    {
+        runtimeError("Expected %d arguments but got %d.", closure->function->arity, argCount);
         return false;
     }
 
@@ -560,8 +575,8 @@ call(ObjFunction *function, int argCount)
     // add a new callStackFrame for this new function which was called from within the current function that the vm
     // is currently executing.
     CallFrame *frame = &vm.frames[vm.frameCount++];
-    frame->function = function;
-    frame->ip = function->chunk.code;
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
     frame->slots = vm.stack.top - argCount - 1;
     return true;
 }
@@ -571,9 +586,9 @@ callValue(Value callee, int argCount)
 {
     if (IS_OBJ(callee)) {
         switch(OBJ_TYPE(callee)) {
-            case OBJ_FUNCTION:
+            case OBJ_CLOSURE:
             {
-                return call(AS_FUNCTION(callee), argCount);
+                return call(AS_CLOSURE(callee), argCount);
             } break;
 
             case OBJ_NATIVE:
