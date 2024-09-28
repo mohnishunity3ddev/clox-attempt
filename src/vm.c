@@ -94,6 +94,7 @@ run()
     (frame->ip += 2, (u16)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+
 #define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
     {                                                                                                             \
@@ -106,6 +107,7 @@ run()
         Value opResult = valueType(AS_NUMBER(peek(0)) op b);                                                      \
         setTop(opResult);                                                                                         \
     } while (false)
+
 #define BINARY_OP_FUNC(func)                                                                                      \
     do                                                                                                            \
     {                                                                                                             \
@@ -114,8 +116,10 @@ run()
         Value res = BOOL_VAL(func(a, b));                                                                         \
         setTop(res);                                                                                              \
     } while (false)
+
     for (;;)
     {
+
 #ifdef DEBUG_TRACE_EXECUTION
         printf("        ");
         for (int i = 0; i < vm.stack.count; i++)
@@ -125,7 +129,6 @@ run()
             printf(" ]");
         }
         printf("\n");
-        // Reading the chunk of code from the current function's frame.
         int offset = (int)(frame->ip - frame->closure->function->chunk.code);
         disassembleInstruction(&frame->closure->function->chunk, offset);
 #endif
@@ -137,7 +140,7 @@ run()
                 Value constant = READ_CONSTANT();
                 push(constant);
             } break;
-
+            // **********************************************************************************
             case OP_NIL:        { push(NIL_VAL);            } break;
             case OP_TRUE:       { push(BOOL_VAL(true));     } break;
             case OP_FALSE:      { push(BOOL_VAL(false));    } break;
@@ -147,19 +150,19 @@ run()
                 u8 popCount = READ_BYTE();
                 popN(popCount);
             } break;
-
+            // **********************************************************************************
             case OP_GET_UPVALUE:
             {
                 u8 slot = READ_BYTE();
                 push(*frame->closure->upvalues[slot]->location);
             } break;
-
+            // **********************************************************************************
             case OP_SET_UPVALUE:
             {
                 u8 slot = READ_BYTE();
                 *frame->closure->upvalues[slot]->location = peek(0);
             } break;
-
+            // **********************************************************************************
             case OP_GET_LOCAL:
             {
                 u8 slot = READ_BYTE();
@@ -170,13 +173,13 @@ run()
                 }
                 push(val);
             } break;
-
+            // **********************************************************************************
             case OP_SET_LOCAL:
             {
                 u8 slot = READ_BYTE();
                 frame->slots[slot] = peek(0);
             } break;
-
+            // **********************************************************************************
             case OP_DEFINE_GLOBAL:
             {
                 ObjString *globalVarName = READ_STRING();
@@ -184,7 +187,7 @@ run()
                 _assert(isNewKey == true);
                 pop();
             } break;
-
+            // **********************************************************************************
             case OP_GET_GLOBAL:
             {
                 ObjString *globalVar =
@@ -197,7 +200,7 @@ run()
                 }
                 push(value);
             } break;
-
+            // **********************************************************************************
             case OP_SET_GLOBAL:
             {
                 ObjString *name = READ_STRING();
@@ -209,14 +212,14 @@ run()
                     return INTERPRET_RUNTIME_ERROR;
                 }
             } break;
-
+            // **********************************************************************************
             case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual); }    break;
             case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual); }   break;
             case OP_GREATER:        { BINARY_OP_FUNC(valuesGreater); }  break;
             case OP_GREATER_EQUAL:  { BINARY_OP_FUNC(!valuesLess); }    break;
             case OP_LESS:           { BINARY_OP_FUNC(valuesLess); }     break;
             case OP_LESS_EQUAL:     { BINARY_OP_FUNC(!valuesGreater); } break;
-
+            // **********************************************************************************
             case OP_ADD:
             {
                 Value bVal = peek(0);
@@ -261,7 +264,7 @@ run()
                     return INTERPRET_RUNTIME_ERROR;
                 }
             } break;
-
+            // **********************************************************************************
             case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
             case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
             case OP_DIVIDE:     { BINARY_OP(NUMBER_VAL, /); } break;
@@ -279,14 +282,14 @@ run()
                     setTop(opResult);
                 } while (0);
             } break;
-
+            // **********************************************************************************
             case OP_NOT:
             {
                 Value p = peek(0);
                 Value t = BOOL_VAL(isFalsey(p));
                 setTop(t);
             } break;
-
+            // **********************************************************************************
             case OP_NEGATE:
             {
                 if (!IS_NUMBER(peek(0))) {
@@ -296,20 +299,20 @@ run()
                 double number = AS_NUMBER(peek(0));
                 setTop(NUMBER_VAL(-number));
             } break;
-
+            // **********************************************************************************
             case OP_PRINT:
             {
                 Value stackTop = pop();
                 printValue(stackTop);
                 printf("\n");
             } break;
-
+            // **********************************************************************************=
             case OP_JUMP:
             {
                 u16 offset = READ_SHORT();
                 frame->ip += offset;
             } break;
-
+            // **********************************************************************************
             case OP_JUMP_IF_FALSE:
             {
                 u16 jumpOffset = READ_SHORT();
@@ -318,13 +321,13 @@ run()
                     frame->ip += jumpOffset;
                 }
             } break;
-
+            // **********************************************************************************
             case OP_LOOP:
             {
                 u16 offset = READ_SHORT();
                 frame->ip -= offset;
             } break;
-
+            // **********************************************************************************
             case OP_CALL:
             {
                 int argCount = READ_BYTE();
@@ -333,7 +336,7 @@ run()
                 }
                 frame = &vm.frames[vm.frameCount - 1];
             } break;
-
+            // **********************************************************************************
             case OP_CLOSURE:
             {
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT());
@@ -349,7 +352,7 @@ run()
                     }
                 }
             } break;
-
+            // **********************************************************************************
             case OP_RETURN:
             {
                 Value result = pop();
@@ -358,8 +361,7 @@ run()
                     pop();
                     return INTERPRET_OK;
                 }
-                // discard the called function's entire stack window (which is by design in the 'slots')
-                // top of the stack ends up right at the beginning of the returning function's stack window.
+
                 vm.stack.top = frame->slots;
                 int newCount = (int)(vm.stack.top - vm.stack.values);
                 vm.stack.count = newCount;
@@ -368,6 +370,7 @@ run()
             } break;
         }
     }
+
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
@@ -493,6 +496,7 @@ callValue(Value callee, int argCount)
             {
                 return call(AS_CLOSURE(callee), argCount);
             } break;
+
             case OBJ_NATIVE:
             {
                 NativeFunc native = AS_NATIVE(callee);
@@ -501,6 +505,7 @@ callValue(Value callee, int argCount)
                 push(result);
                 return true;
             } break;
+            
             default: {
                 _assert(!"Should not be here!");
             } break;
