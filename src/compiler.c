@@ -59,6 +59,16 @@ typedef struct {
     // TODO: Implement const variables. Do the same for global variables.
 } Local;
 
+typedef struct {
+    // index in function's upvalue array where the local variable in some enclosing function is being closed over
+    // by this function.
+    u8 index;
+    // is the variable being closed over by the current function declared in the immediate parent of this function.
+    // if yes, then this is true. false if the variabvle being closed over is declared beyond the immediate
+    // enclosing function.
+    bool isLocal;
+} Upvalue;
+
 typedef enum {
     TYPE_FUNCTION_USER_DEFINED,
     TYPE_FUNCTION_MAIN,
@@ -103,6 +113,9 @@ struct Compiler {
     /// @brief Number of locals in one local scope + earlier lesser scope depths since earlier less scope depth
     ///        variables are visible in the current scope.
     int localCount;
+
+    /// @brief the array which stores the local variables in the function compiler's enclosing/parent function.
+    Upvalue upvalues[UINT8_COUNT];
 
     /// @brief Number of blocks 'surrounding' the bit of code that we are processing currently.
     ///        0 depth is the global scope, 1 is the first scope, 2 is the nested scope inside the first scope and
@@ -402,7 +415,8 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->name.length = 0;
 }
 
-/// @brief  emit a return statement to exit the currently running function.
+/// @brief  emit a return statement to exit the currently running function and set the current compiler to the root
+///         function which was caller to this current function.
 /// @return The pointer to the currently running function's object where we are returning from.
 static ObjFunction *
 endCompiler()
@@ -564,6 +578,81 @@ resolveLocal(Compiler *compiler, Token *name)
     }
 
     return result;
+}
+
+/// @brief Add an upvalue to the current function's upvalue array. Upvalues are basically referring to local
+///        variables declared inside the passed in function's parent/enclosing function.
+/// @param compiler the function compiler of the currently executing function compiler.
+/// @param index index of the local in the local's array of the enclosing function of the current function
+///              compiler.
+/// @param isLocal is the variable being closed over by the current function declared in the immediate parent of
+///                this function. if yes, then this is true. false if the variable being closed over is declared
+///                beyond the immediate enclosing function.
+/// @return returns the index into function's upvalue array where the new upvalue was created for the local
+///         variable inside its enclosing function.
+static int
+addUpvalue(Compiler *compiler, u8 localVarIndex, bool isLocal)
+{
+    int upvalueCount = compiler->function->upvalueCount;
+
+    // check to see if there already is an upvalue present for the current local variable inside the parent
+    // function of the passed in nested function.
+    for (int i = 0; i < upvalueCount; ++i)
+    {
+        Upvalue *upvalue = &compiler->upvalues[i];
+        if (upvalue->index == localVarIndex && upvalue->isLocal == isLocal) {
+            return i;
+        }
+    }
+
+    // OP_GET_UPVALUE and SET_UPVALUE only have a one byte operand. So you can only have 256 total amount of unique
+    // upvalues.
+    if (upvalueCount == UINT8_COUNT) {
+        error("Too many unique closure variables in function");
+        return 0;
+    }
+
+    compiler->upvalues[upvalueCount].isLocal = isLocal;
+    compiler->upvalues[upvalueCount].index = localVarIndex;
+
+    return compiler->function->upvalueCount++;
+}
+
+/// @brief resolve for upvalues getting accessed in the current function compiler. upvalues are local variables
+///        used inside the passed in function's enclosing/parenting function.
+/// @param compiler the current function compiler
+/// @param name name of the variable seen by the compiler inside this function(nested inside its parent
+/// potentially)
+/// @return returns the index into function's upvalue array where the new upvalue was created for the local
+///         variable inside its enclosing function.
+static int
+resolveUpvalue(Compiler *compiler, Token *name)
+{
+    // The current function chunk that the compiler is processing is a global function, not nested inside a function
+    // resolveUpvalue only looks for local variables with the given name in the 'parent' function.
+    if (compiler->enclosing == NULL)
+        return -1;
+
+    // try to find the local variable given by its 'name' in the enclosing/parent function.
+    int local = resolveLocal(compiler->enclosing, name);
+    if (local != -1) {
+        return addUpvalue(compiler, (u8)local, true);
+    }
+
+    // If a variable getting accessed inside the current nested function is not declared in the current function's
+    // immediate enclosing function, then we have to look up the entire hierarchy of nested functions to see where
+    // it is declared and then refer to it.
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+        // we pass false for the isLocal parameter in this case because an upper enclosing function inside of which
+        // this current passed in function is nested has ITS enclosing function where the variable is declared. In
+        // other words, we did not find the variable inside the immediately enclosing function to this function,
+        // rather the local variable is way UP in the its parent hierarchy. isLocal captures this distinction.
+        // and it is true if the variable is declared in the immediate enclosing function.
+        return addUpvalue(compiler, (u8)upvalue, false);
+    }
+
+    return -1;
 }
 
 // At this stage, the compiler records the presence of a local variable by adding the variable info into its list
@@ -890,6 +979,29 @@ namedVariable(Token name, bool canAssign)
     if (arg != -1) {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
+    } else
+    if ((arg = resolveUpvalue(current, &name)) != -1) {
+        // NOTE: Look for local variables in the surrounding function where this function is nested.
+        //
+        // Upvalues are locals that need to be there on the heap so that closures can be invoked and all it's local
+        // variables that are really using "local variables" of its surrounding function(which has been returned
+        // from and thus not available on the stack at runtime) can be accessible.
+        //
+        // func outer(s) {
+        //      func inner() {
+        //          print s;
+        //      }
+        //      return inner;
+        // }
+        //
+        // var s1 = outer("s1String");
+        // var s2 = outer("s2String");
+        // s1() should print s1String but notice without upValues (the local variable s in outer func) being
+        // available on the heap even though its local to outer func(meant to be on the stack), it won't be
+        // available since outer has returned and its local stack variables cannot be used since they are on the
+        // stack.
+        getOp = OP_GET_UPVALUE;
+        setOp = OP_SET_UPVALUE;
     } else {
         getOp = OP_GET_GLOBAL;
         setOp = OP_SET_GLOBAL;
@@ -991,7 +1103,17 @@ function(FunctionType type)
     // return the currently runnign function object so that it can be pushed on to the constants array of the
     // caller's function chunk (i.e. the function of the current 'compiler').
     ObjFunction *function = endCompiler();
+    // By the time the compiler reaches the end of a function declaration, every variable reference has been
+    // resolved as either a local, an upvalue, or a global. Each upvalue may in turn capture a local variable from
+    // the surrounding function, or an upvalue in the case of transitive closures. We finally have enough data to
+    // emit bytecode which creates a closure at runtime that captures all of the correct variables.
     emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL((Obj *)function)));
+    // OP_CLOSURE has variable size operand that is 2*upvalueCount.
+    // it sends over all resolved upvalues back to the VM.
+    for (int i = 0; i < function->upvalueCount; ++i) {
+        emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+        emitByte(compiler.upvalues[i].index);
+    }
 }
 
 static void

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "debug.h"
 #include "value.h"
+#include "object.h"
 
 typedef struct
 {
@@ -115,6 +116,15 @@ disassembleInstruction(Chunk *chunk, int offset)
             printf("%16s %4d ", "OP_CLOSURE", constant);
             printValue(chunk->constants.values[constant]);
             printf("\n");
+
+            ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant]);
+            for (int j = 0; j < function->upvalueCount; ++j)
+            {
+                int isLocal = chunk->code[offset++];
+                int index = chunk->code[offset++];
+                printf("%04d      |                     %s %d\n",
+                       offset - 2, isLocal ? "local" : "upvalue", index);
+            }
             result = offset;
         } break;
 
@@ -134,6 +144,8 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_DEFINE_GLOBAL:  { result = constantInstruction("OP_DEFINE_GLOBAL", chunk, offset); }     break;
         case OP_GET_GLOBAL:     { result = constantInstruction("OP_GET_GLOBAL", chunk, offset); }        break;
         case OP_SET_GLOBAL:     { result = constantInstruction("OP_SET_GLOBAL", chunk, offset); }        break;
+        case OP_GET_UPVALUE:    { result = byteInstruction("OP_GET_UPVALUE", chunk, offset); }           break;
+        case OP_SET_UPVALUE:    { result = byteInstruction("OP_SET_UPVALUE", chunk, offset); }           break;
 
         case OP_NEGATE:         { result = simpleInstruction("OP_NEGATE", offset); }                     break;
         case OP_NOT:            { result = simpleInstruction("OP_NOT", offset); }                        break;

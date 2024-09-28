@@ -44,6 +44,9 @@ typedef struct {
     Obj obj;
     /// @brief Number of parameters the function expects.
     int arity;
+    /// @brief number of upvalues (variables inside a nested function which refer to local variables in its
+    ///        enclosing/parent function).
+    int upvalueCount;
     /// @brief chunk of code this function has. A function gets to have its own chunk.
     Chunk chunk;
     /// @brief describes the name of the function
