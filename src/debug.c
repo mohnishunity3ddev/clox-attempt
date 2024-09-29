@@ -103,6 +103,7 @@ disassembleInstruction(Chunk *chunk, int offset)
     switch(instruction)
     {
         case OP_PRINT:          { result = simpleInstruction("OP_PRINT", offset); }                      break;
+        case OP_CLOSE_UPVALUE:  { result = simpleInstruction("OP_CLOSE_UPVALUE", offset); }              break;
         case OP_RETURN:         { result = simpleInstruction("OP_RETURN", offset); }                     break;
 
         case OP_JUMP:           { result = jumpInstruction("OP_JUMP", 1, chunk, offset); }               break;

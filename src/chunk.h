@@ -65,6 +65,9 @@ typedef enum
     /// @brief emitted whenever the code sees a function, which parses the whole thing and then emits this
     /// instruction. one byte operand returns an index into value array having the function object.
     OP_CLOSURE,
+    /// @brief Hoists the top local variable from the stack to the heap, allowing closures to access it after the
+    /// enclosing function has returned. No operand needed.
+    OP_CLOSE_UPVALUE,
     /// @brief This op code means return from a function.
     OP_RETURN,
 } OpCode;

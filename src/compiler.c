@@ -54,11 +54,15 @@ typedef struct {
     Token name;
     /// @brief The depth of the scope in which the variable is declared
     int depth;
+    /// @brief is it being referenced by a nested function(closure)?
+    bool isCaptured;
 } Local;
 
-/// @brief Represents an upvalue (closed-over variable) in the compiler
+/// @brief Represents an upvalue (closed-over variable) in the compiler. An upvalue allows a closure to access
+/// local variables from its enclosing functions, even after the parent functions have returned and the variable is
+/// removed from the stack.
 typedef struct {
-    /// @brief Index of the upvalue in the upvalues list of the compiler struct this is part of
+    /// @brief Index of the upvalue in the upvalues list
     u8 index;
     /// @brief Flag indicating if the upvalue is local to the immediately enclosing function
     bool isLocal;
@@ -330,6 +334,7 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
+    local->isCaptured = false;
 }
 
 /// @brief Finalizes the current function compilation
@@ -366,14 +371,21 @@ endScope()
 {
     current->scopeDepth--;
     int popCount = 0;
+    // pop local variables at runtime when scope has ended.
     while (current->localCount > 0 &&
            current->locals[current->localCount - 1].depth > current->scopeDepth)
     {
-        ++popCount;
+        if (current->locals[current->localCount - 1].isCaptured) {
+            emitByte(OP_CLOSE_UPVALUE);
+        } else {
+            popCount;
+        }
         current->localCount--;
     }
+
     _assert(popCount <= UINT8_COUNT);
-    emitBytes(OP_POPN, (u8)popCount);
+    if (popCount > 0)
+        emitBytes(OP_POPN, (u8)popCount);
 }
 
 /// @brief Parses an expression with a given precedence level
@@ -494,6 +506,7 @@ resolveUpvalue(Compiler *compiler, Token *name)
     // is it a local in an immediate enclosing function
     int localsIndex = resolveLocal(enclosingCompiler, name);
     if (localsIndex != -1) {
+        compiler->enclosing->locals[localsIndex].isCaptured = true;
         return addUpvalue(compiler, (u8)localsIndex, true);
     }
 
@@ -518,6 +531,7 @@ addLocal(Token name)
     Local *local = &current->locals[current->localCount++];
     local->name = name;
     local->depth = UNINITIALIZED_MARKER;
+    local->isCaptured = false;
 }
 
 /// @brief Declares a new local variable in the current scope, add to locals list.
