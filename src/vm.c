@@ -21,6 +21,7 @@ clockNative(int argCount, Value *args)
 static bool callValue(Value callee, int argCount);
 static bool call(ObjClosure *closure, int argCount);
 static ObjUpvalue *captureUpvalue(Value *local);
+static void closeUpvalues(Value *last);
 CallFrame *mainFrame;
 
 static bool
@@ -94,6 +95,8 @@ run()
     (frame->ip += 2, (u16)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+#define READ_GLOBAL_STRING()                                                                                      \
+    (AS_STRING(mainFrame->closure->function->chunk.constants.values[READ_BYTE()]));
 
 #define BINARY_OP(valueType, op)                                                                                  \
     do                                                                                                            \
@@ -141,6 +144,7 @@ run()
                 Value constant = READ_CONSTANT();
                 push(constant);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_NIL:        { push(NIL_VAL);            } break;
             case OP_TRUE:       { push(BOOL_VAL(true));     } break;
@@ -151,18 +155,21 @@ run()
                 u8 popCount = READ_BYTE();
                 popN(popCount);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_GET_UPVALUE:
             {
                 u8 slot = READ_BYTE();
                 push(*frame->closure->upvalues[slot]->location);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_SET_UPVALUE:
             {
                 u8 slot = READ_BYTE();
                 *frame->closure->upvalues[slot]->location = peek(0);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_GET_LOCAL:
             {
@@ -174,12 +181,14 @@ run()
                 }
                 push(val);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_SET_LOCAL:
             {
                 u8 slot = READ_BYTE();
                 frame->slots[slot] = peek(0);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_DEFINE_GLOBAL:
             {
@@ -188,11 +197,11 @@ run()
                 _assert(isNewKey == true);
                 pop();
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_GET_GLOBAL:
             {
-                ObjString *globalVar =
-                    ((ObjString *)(((mainFrame->closure->function->chunk.constants.values[(*frame->ip++)])).as.obj));
+                ObjString *globalVar = READ_GLOBAL_STRING();
                 Value value;
                 if (!tableGet(&vm.globals, globalVar, &value))
                 {
@@ -201,18 +210,20 @@ run()
                 }
                 push(value);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_SET_GLOBAL:
             {
-                ObjString *name = READ_STRING();
+                ObjString *globalVar = READ_GLOBAL_STRING();
                 // the hashtable set function returns true if the key for which the value was to be set, wasn't
-                if (tableSet(&vm.globals, name, peek(0)))
+                if (tableSet(&vm.globals, globalVar, peek(0)))
                 {
-                    tableDelete(&vm.globals, name);
-                    runtimeError("Undefined variable '%s'.", name->chars);
+                    tableDelete(&vm.globals, globalVar);
+                    runtimeError("Undefined variable '%s'.", globalVar->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual); }    break;
             case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual); }   break;
@@ -220,6 +231,7 @@ run()
             case OP_GREATER_EQUAL:  { BINARY_OP_FUNC(!valuesLess); }    break;
             case OP_LESS:           { BINARY_OP_FUNC(valuesLess); }     break;
             case OP_LESS_EQUAL:     { BINARY_OP_FUNC(!valuesGreater); } break;
+
             // -----------------------------------------------------------------------------------
             case OP_ADD:
             {
@@ -243,7 +255,8 @@ run()
                         const char *aStr = a ? "True" : "False";
                         strObject = (Obj *)copyStringFormat("%s%s", aStr, b->chars);
                     } else {
-                        _assert(!"Should not be here!");
+                        runtimeError("Unsupported operands for +");
+                        exit(1);
                     }
                     setTop(OBJ_VAL(strObject));
                 } else if (IS_STRING(aVal) && !IS_STRING(bVal)) {
@@ -258,13 +271,15 @@ run()
                         Obj *strObject = (Obj *)copyStringFormat("%s%s", a->chars, b ? "True" : "False");
                         setTop(OBJ_VAL(strObject));
                     } else {
-                        _assert(!"Should not be here!");
+                        runtimeError("Unsupported operands for +");
+                        exit(1);
                     }
                 } else {
                     runtimeError("Operands must be two numbers or two strings.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_SUBTRACT:   { BINARY_OP(NUMBER_VAL, -); } break;
             case OP_MULTIPLY:   { BINARY_OP(NUMBER_VAL, *); } break;
@@ -283,6 +298,7 @@ run()
                     setTop(opResult);
                 } while (0);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_NOT:
             {
@@ -290,6 +306,7 @@ run()
                 Value t = BOOL_VAL(isFalsey(p));
                 setTop(t);
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_NEGATE:
             {
@@ -300,6 +317,7 @@ run()
                 double number = AS_NUMBER(peek(0));
                 setTop(NUMBER_VAL(-number));
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_PRINT:
             {
@@ -307,12 +325,14 @@ run()
                 printValue(stackTop);
                 printf("\n");
             } break;
+
             // -----------------------------------------------------------------------------------=
             case OP_JUMP:
             {
                 u16 offset = READ_SHORT();
                 frame->ip += offset;
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_JUMP_IF_FALSE:
             {
@@ -322,12 +342,14 @@ run()
                     frame->ip += jumpOffset;
                 }
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_LOOP:
             {
                 u16 offset = READ_SHORT();
                 frame->ip -= offset;
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_CALL:
             {
@@ -337,27 +359,43 @@ run()
                 }
                 frame = &vm.frames[vm.frameCount - 1];
             } break;
+
             // -----------------------------------------------------------------------------------
             case OP_CLOSURE:
             {
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT());
                 ObjClosure *closure = newClosure(function);
                 push(OBJ_VAL((Obj *)closure));
+                // are there any local variables in its parent hierarchy that the current function(closure) is accessing?
                 for (int i = 0; i < closure->upvalueCount; ++i) {
-                    u8 isLocal = READ_BYTE();
-                    u8 index = READ_BYTE();
+                    u8 isLocal = READ_BYTE(); // is it a local variable in the immediate enclosing function?
+                    u8 index = READ_BYTE(); // what is the local index of the function's local variables list.
                     if (isLocal) {
+                        // slots is the first stack slot where this function starts.
                         closure->upvalues[i] = captureUpvalue(frame->slots + index);
                     } else {
+                        // this closure deeply nested and it needs to access an upvalue from one of its ancestor functions.
                         closure->upvalues[i] = frame->closure->upvalues[i];
                     }
                 }
             } break;
+
+            // -----------------------------------------------------------------------------------
+            case OP_CLOSE_UPVALUE:
+            {
+                // hoist the variable on stack top to the heap since it will be accessed by a closure.
+                closeUpvalues(vm.stack.top - 1);
+                // we still want the local variable to be popped since the function is exiting.
+                pop();
+            } break;
+
             // -----------------------------------------------------------------------------------
             case OP_RETURN:
             {
                 Value result = pop();
                 vm.frameCount--;
+                // close every remaining openvalue still owned by the returning function.
+                closeUpvalues(frame->slots);
                 if (vm.frameCount == 0) {
                     pop();
                     return INTERPRET_OK;
@@ -369,9 +407,11 @@ run()
                 push(result);
                 frame = &vm.frames[vm.frameCount - 1];
             } break;
+            // -----------------------------------------------------------------------------------
         }
     }
 
+#undef READ_GLOBAL_STRING
 #undef READ_BYTE
 #undef READ_SHORT
 #undef READ_CONSTANT
@@ -385,6 +425,7 @@ initVM()
 {
     resetStack();
     vm.objects = NULL;
+    vm.openUpvalues = NULL;
     initTable(&vm.strings);
     initTable(&vm.globals);
     defineNative("clock", clockNative);
@@ -517,18 +558,64 @@ callValue(Value callee, int argCount)
     return false;
 }
 
+/// @brief generate upvalue for the given value on the stack so closures accessing these stack values are able to
+///        access them even when the stack values have been removed when the function that define them have returned after
+///        execution.
+/// @param local pointer to a value that is currently there on the call stack.
+/// @return return the pointer to the upvalue.
 static ObjUpvalue *
 captureUpvalue(Value *local)
 {
+    ObjUpvalue *prevUpvalue = NULL;
+    ObjUpvalue *upvalue = vm.openUpvalues;
+    // vm.openUpvalues are sorted on decreasing stack size. the head (vm.openUpvalues) is near the top of the
+    // stack.
+    while (upvalue != NULL &&
+           upvalue->location > local)
+    {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    // we found an upvalue which is referencing the same local that we are wanting an upvalue for.
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
+
+    // create a new open value(referencing variables already on the stack) and add it to the openUpvalues list.
     ObjUpvalue *createdUpvalue = newUpvalue(local);
+    createdUpvalue->next = upvalue;
+    if (prevUpvalue == NULL) {
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue->next = createdUpvalue;
+    }
+
     return createdUpvalue;
+}
+
+/// @brief hoist the value on the stack slot and additionally close all upvalue that are referencing to stack slots
+///        above the provided one.
+/// @param last pointer to the stack slot that the upvalue refers to
+static void
+closeUpvalues(Value *last)
+{
+    // close all upvalues that are above the value sent it on the stack OR exactly referring to the value sent in
+    // here. walk the openvalue list from top to bottom (stack).
+    while (vm.openUpvalues != NULL &&
+           vm.openUpvalues->location >= last)
+    {
+        ObjUpvalue *upvalue = vm.openUpvalues;
+        upvalue->closed = *upvalue->location; // copy the stack value into the heap memory where the upvalue is stored.
+        upvalue->location = &upvalue->closed; // update the location of the value it is referring to to point to its 'closed' variable.
+        vm.openUpvalues = upvalue->next; // move the head of the openValues list to the next one since this one is closed now.
+    }
 }
 
 void
 setTop(Value value)
 {
-    if (vm.stack.count > 0)
-    {
+    if (vm.stack.count > 0) {
         *(vm.stack.top - 1) = value;
     }
 }

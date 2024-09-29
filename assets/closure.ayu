@@ -50,25 +50,21 @@
 //   }
 // }
 
-// var globalSet;
-// var globalGet;
-//
-// fun ex() {
-//   var a = "initial";
-//
-//   fun set() { a = "updated"; }
-//   fun get() { print a; }
-//
-//   globalSet = set;
-//   globalGet = get;
-// }
-//
-// ex();
-// globalSet();
-// globalGet();
-
-fun sum(a, b, c) {
-    return a+b+c;
+var globalSet;
+var globalGet;
+fun ex() {
+  var a = "initial";
+  fun set(str) { a = str; }
+  fun get() { return a; }
+  globalSet = set;
+  globalGet = get;
 }
 
-print sum(3, 4, 5);
+ex();
+print "initial value = " + globalGet();
+globalSet("mani");
+print "updated to - " + globalGet();
+globalSet("mani2");
+print "updated again to - " + globalGet();
+globalSet("mani3");
+print "updated again to - " + globalGet();

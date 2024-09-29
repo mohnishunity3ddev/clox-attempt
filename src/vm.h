@@ -61,6 +61,11 @@ typedef struct
     /// @brief a hashtable with key = names of the global variables and the value they represent.
     Table globals;
     Obj *objects;
+    /// @brief head of the list of upvalues sorted based on increasing stack size. Each open upvalue points to the
+    ///        next open upvalue that references a local variable farther down the stack. open upvalues are
+    ///        referring to variables still on the stack. If they get removed from the stack upvalues need to be
+    ///        'closed' meaning the variable they are referencing need to be put up on the heap.
+    ObjUpvalue *openUpvalues;
 } VM;
 
 typedef enum

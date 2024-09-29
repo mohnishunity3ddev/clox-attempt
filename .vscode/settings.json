@@ -30,7 +30,15 @@
         "scanner.h": "c",
         "test.h": "c",
         "compiler.h": "c",
-        "stdarg.h": "c"
+        "stdarg.h": "c",
+        "system_error": "c",
+        "xlocale": "c",
+        "algorithm": "c",
+        "xutility": "c",
+        "optional": "c",
+        "type_traits": "c",
+        "xlocmon": "c",
+        "xtr1common": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",

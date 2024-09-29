@@ -376,9 +376,12 @@ endScope()
            current->locals[current->localCount - 1].depth > current->scopeDepth)
     {
         if (current->locals[current->localCount - 1].isCaptured) {
+            // hoist the local variable from the stack onto the heap since the function it is declared in is
+            // exiting.
             emitByte(OP_CLOSE_UPVALUE);
         } else {
-            popCount;
+            // popCount++;
+            emitByte(OP_POP);
         }
         current->localCount--;
     }
@@ -506,7 +509,8 @@ resolveUpvalue(Compiler *compiler, Token *name)
     // is it a local in an immediate enclosing function
     int localsIndex = resolveLocal(enclosingCompiler, name);
     if (localsIndex != -1) {
-        compiler->enclosing->locals[localsIndex].isCaptured = true;
+        // local variable in this function is getting captured by a closure.
+        enclosingCompiler->locals[localsIndex].isCaptured = true;
         return addUpvalue(compiler, (u8)localsIndex, true);
     }
 
