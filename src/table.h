@@ -31,8 +31,8 @@ bool tableGet(Table *table, ObjString *key, Value *value);
 /// @param table hashtable to add to.
 /// @param key
 /// @param value
-/// @return true if a new entry is added with the key, false if key was already existing and it overwrote it with
-/// the value provided.
+/// @return true if entry for the key-value pair provided was not in the table and is now added. false, if the
+/// key-value pair was there and the value has been updated to the given one.
 bool tableSet(Table *table, ObjString *key, Value value);
 
 /// @brief copy all entries from one table to another.
@@ -53,6 +53,12 @@ bool tableDelete(Table *table, ObjString *key);
 /// @param hash the hash of the string
 /// @return pointer to the stored string if it is available.
 ObjString *tableFindString(Table *table, const char *chars, int length, u32 hash);
+
+/// @brief if we see that key object is not marked in this table(i.e. not reachable) after the mark phase in the GC
+///        has completed. that means it should be deleted. There will no problem of dangling pointers because we
+///        are calling tableDelete() which does this cleanly.
+/// @param table
+void tableRemoveWhite(Table *table);
 
 /// @brief mark all entries in the hashtable table
 /// @param table the table we want the GC for marking reachable objects.

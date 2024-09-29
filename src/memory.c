@@ -96,9 +96,8 @@ markObject(Obj *object)
         if (vm.grayStack == NULL)
             exit(1);
     }
+
     vm.grayStack[vm.grayCount++] = object;
-
-
 }
 
 /// @brief we only need to mark those values which live on the heap. Object types are the only ones which are heap
@@ -164,7 +163,13 @@ blackenObject(Obj *object)
     printf("\n");
 #endif
 
-    switch (object->type) {
+    switch (object->type)
+    {
+        // Native functions and string have no outgoing memory references. They are inherently 'black'
+        case OBJ_NATIVE:
+        case OBJ_STRING:
+            break;
+
         // Each closure has a reference to the bare function it wraps, as well as an array of pointers to the
         // upvalues it captures. We trace all of those.
         case OBJ_CLOSURE:
@@ -191,11 +196,6 @@ blackenObject(Obj *object)
         {
             markValue(((ObjUpvalue *)object)->closed);
         } break;
-
-        // Native functions and string have no outgoing memory references. They are inherently 'black'
-        case OBJ_NATIVE:
-        case OBJ_STRING:
-            break;
     }
 }
 
@@ -211,6 +211,32 @@ traceReferences()
     }
 }
 
+/// @brief sweep off all the 'white' objects which are not reachable by the GC.
+static void
+sweep()
+{
+    Obj *previous = NULL;
+    Obj *object = vm.objects;
+    while (object != NULL) {
+        if (object->isMarked) {
+            // Unmark for the next GC Mark-Sweep-Collect Cycle.
+            object->isMarked = false;
+            previous = object;
+            object = object->next;
+        } else {
+            Obj *unreached = object;
+            object = object->next;
+            if (previous != NULL) {
+                previous->next = object;
+            } else {
+                vm.objects = object;
+            }
+
+            freeObject(unreached);
+        }
+    }
+}
+
 void
 collectGarbage()
 {
@@ -220,6 +246,14 @@ collectGarbage()
 
     markRoots();
     traceReferences();
+    // the string table only has key no value (its a hash set not a hash map). if we see that key object is not
+    // marked in this table(i.e. not reachable) after the mark phase and tracingReferences routines in the GC has
+    // completed. that means it should be deleted. There will no problem of dangling pointers because we are
+    // calling tableDelete() which does this cleanly in this function
+    tableRemoveWhite(&vm.strings);
+    // Here, all gray objects are turned 'black' (and we want to hold on to them) and the grayStack is empty, now
+    // we want to sweep off all the 'white' objects which are not reachable by the GC.
+    sweep();
 
 #ifdef DEBUG_LOG_GC
     printf("-- gc end\n");

@@ -193,6 +193,7 @@ run()
             case OP_DEFINE_GLOBAL:
             {
                 ObjString *globalVarName = READ_STRING();
+                // value meant for this global is already there on the stack. lookup compiler.varDeclaration()
                 bool isNewKey = tableSet(&vm.globals, globalVarName, peek(0));
                 _assert(isNewKey == true);
                 pop();
@@ -215,7 +216,8 @@ run()
             case OP_SET_GLOBAL:
             {
                 ObjString *globalVar = READ_GLOBAL_STRING();
-                // the hashtable set function returns true if the key for which the value was to be set, wasn't
+                // the hashtable set function returns true if key-value pair wasn't in it, which is error since
+                // set_global is called for variables that were seen before and hence should be inside the table.
                 if (tableSet(&vm.globals, globalVar, peek(0)))
                 {
                     tableDelete(&vm.globals, globalVar);

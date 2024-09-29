@@ -38,9 +38,10 @@ findEntry(Entry *entries, int capacity, ObjString *key)
         Entry *entry = &entries[index];
         // Looking to see if its the tombstone sentinel or a truly null entry.
         if (entry->key == NULL) {
-            // the sentinel is a half entry. Key is null, value is true(bool_val).
+            // the tombstone sentinel is a half entry. Key is null, value is true(bool_val).
             if (IS_NIL(entry->value)) {
-                // return the truly null entry if no tombstone was encountered, otherwise return the tombstone.
+                // return the truly null entry if no tombstone was encountered ever in this loop, otherwise return
+                // the tombstone.
                 return tombstone != NULL ? tombstone : entry;
             } else {
                 // found a tombstone sentinel entry. set the tombstone to point to the FIRST encountered tombstone.
@@ -153,7 +154,7 @@ tableDelete(Table *table, ObjString *key)
     Entry *entry = findEntry(table->entries, table->capacity, key);
     if (entry->key == NULL)
         return false;
-
+    
     // Place the tombstone in place of the deleted entry, to make sure collision chains are steady.
     entry->key = NULL;
     entry->value = BOOL_VAL(true);
@@ -183,6 +184,17 @@ tableFindString(Table *table, const char *chars, int length, u32 hash)
         }
 
         index = (index + 1) % table->capacity;
+    }
+}
+
+void
+tableRemoveWhite(Table *table)
+{
+    for (int i = 0; i < table->capacity; ++i) {
+        Entry *entry = &table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.isMarked) {
+            tableDelete(table, entry->key);
+        }
     }
 }
 
