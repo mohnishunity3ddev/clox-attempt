@@ -56,16 +56,32 @@ typedef struct
     int frameCount;
 
     Stack stack;
+
     /// @brief a hashtable of unique strings (interned strings).
     Table strings;
+
     /// @brief a hashtable with key = names of the global variables and the value they represent.
     Table globals;
+    
     Obj *objects;
+
     /// @brief head of the list of upvalues sorted based on increasing stack size. Each open upvalue points to the
     ///        next open upvalue that references a local variable farther down the stack. open upvalues are
     ///        referring to variables still on the stack. If they get removed from the stack upvalues need to be
     ///        'closed' meaning the variable they are referencing need to be put up on the heap.
     ObjUpvalue *openUpvalues;
+
+    // NOTE: ------------------------GC Stuff------------------------
+    // Gray objects are ones which are found to be reachable by the GC. But the GC hasn't gone through the gray
+    // object's own graph of nodes it can reach. When all its references are traversed/visited, we mark it
+    // black. when GC has not even visited the root, it's default color is white.
+
+    /// @brief number of gray objects currently in the stack.
+    int grayCount;
+    /// @brief capacity of the gray varaible stack
+    int grayCapacity;
+    /// @brief stack holding obj pointers (heap allocated).
+    Obj **grayStack;
 } VM;
 
 typedef enum

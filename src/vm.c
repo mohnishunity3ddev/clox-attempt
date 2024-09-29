@@ -426,6 +426,12 @@ initVM()
     resetStack();
     vm.objects = NULL;
     vm.openUpvalues = NULL;
+
+    // At the beginning there are no gray objects since the GC has not even started visiting nodes yet.
+    vm.grayCapacity = 0;
+    vm.grayCount = 0;
+    vm.grayStack = NULL;
+
     initTable(&vm.strings);
     initTable(&vm.globals);
     defineNative("clock", clockNative);
@@ -460,6 +466,7 @@ freeVM()
 #endif
     vm.stack.count = 0;
     freeObjects();
+    free(vm.grayStack);
 }
 
 void

@@ -76,14 +76,29 @@ freeObject(Obj *object)
 void
 markObject(Obj *object)
 {
-    if (object == NULL)
-        return;
+    if (object == NULL) return;
+    if (object->isMarked) return;
+
 #ifdef DEBUG_LOG_GC
     printf("%p mark ", (void *)object);
     printValue(OBJ_VAL(object));
     printf("\n");
 #endif
+
     object->isMarked = true;
+
+    // object is seen to be reachable by the VM. Color it Gray.
+    if (vm.grayCapacity < vm.grayCount + 1) {
+        vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
+        vm.grayStack = (Obj **)realloc(vm.grayStack, sizeof(Obj *) * vm.grayCapacity);
+
+        // NOTE: OS Kernel error response. Abort.
+        if (vm.grayStack == NULL)
+            exit(1);
+    }
+    vm.grayStack[vm.grayCount++] = object;
+
+
 }
 
 /// @brief we only need to mark those values which live on the heap. Object types are the only ones which are heap
@@ -94,6 +109,14 @@ markValue(Value value)
 {
     if (IS_OBJ(value))
         markObject(AS_OBJ(value));
+}
+
+static void
+markArray(ValueArray *array)
+{
+    for (int i = 0; i < array->count; ++i) {
+        markValue(array->values[i]);
+    }
 }
 
 /// @brief Mark phase for the mark-sweep-collect GC algo.
@@ -128,6 +151,66 @@ markRoots()
     markCompilerRoots();
 }
 
+/// @brief go through all outgoing references to heap allocations by the provided object and color them 'black',
+///        black objects are not recorded in a separate variable. black objects are those which are marked to be
+///        seen and are not inside the VM's grayStack.
+/// @param object
+static void
+blackenObject(Obj *object)
+{
+#ifdef DEBUG_LOG_GC
+    printf("%p blacken ", (void *)object);
+    printValue(OBJ_VAL(object));
+    printf("\n");
+#endif
+
+    switch (object->type) {
+        // Each closure has a reference to the bare function it wraps, as well as an array of pointers to the
+        // upvalues it captures. We trace all of those.
+        case OBJ_CLOSURE:
+        {
+            ObjClosure *closure = (ObjClosure *)object;
+            markObject((Obj *)closure->function);
+            for (int i = 0; i < closure->upvalueCount; ++i) {
+                markObject((Obj *)closure->upvalues[i]);
+            }
+        } break;
+
+        // Each function has a reference to an ObjString containing the function’s name. More importantly, the
+        // function has a constant table packed full of references to other objects
+        case OBJ_FUNCTION:
+        {
+            ObjFunction *function = (ObjFunction *)object;
+            markObject((Obj *)function->name);
+            markArray(&function->chunk.constants);
+        } break;
+
+        // When an upvalue is closed, it contains a reference to the closed-over value. Since the value is no
+        // longer on the stack, we need to make sure we trace the reference to it from the upvalue.
+        case OBJ_UPVALUE:
+        {
+            markValue(((ObjUpvalue *)object)->closed);
+        } break;
+
+        // Native functions and string have no outgoing memory references. They are inherently 'black'
+        case OBJ_NATIVE:
+        case OBJ_STRING:
+            break;
+    }
+}
+
+/// @brief get a gray object(reachable directly by the VM) from the VM's grayStack, and then go through all the
+/// allocation that are reachable through this gray object. AFter going through all the references of the gray
+/// object, color it 'black'.
+static void
+traceReferences()
+{
+    while (vm.grayCount > 0) {
+        Obj *object = vm.grayStack[--vm.grayCount];
+        blackenObject(object);
+    }
+}
+
 void
 collectGarbage()
 {
@@ -136,6 +219,7 @@ collectGarbage()
 #endif
 
     markRoots();
+    traceReferences();
 
 #ifdef DEBUG_LOG_GC
     printf("-- gc end\n");
