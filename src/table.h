@@ -54,4 +54,8 @@ bool tableDelete(Table *table, ObjString *key);
 /// @return pointer to the stored string if it is available.
 ObjString *tableFindString(Table *table, const char *chars, int length, u32 hash);
 
+/// @brief mark all entries in the hashtable table
+/// @param table the table we want the GC for marking reachable objects.
+void markTable(Table *table);
+
 #endif

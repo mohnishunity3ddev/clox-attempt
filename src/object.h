@@ -29,6 +29,9 @@ typedef enum {
 /// @brief Base class definition for all structs. Using this structure for inhertitance.
 struct Obj{
     ObjType type;
+    /// @brief is this object marked to be reachable by the GC?
+    bool isMarked;
+    /// @brief intrusive linked list next pointers.
     struct Obj *next;
 };
 
