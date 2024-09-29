@@ -45,10 +45,9 @@ freeObject(Obj *object)
 
     switch(object->type)
     {
-        case OBJ_UPVALUE:
-        {
-            FREE(ObjUpvalue, object);
-        } break;
+        case OBJ_CLASS:   { FREE(ObjClass, object); } break;
+
+        case OBJ_UPVALUE: { FREE(ObjUpvalue, object); } break;
 
         case OBJ_CLOSURE:
         {
@@ -67,7 +66,7 @@ freeObject(Obj *object)
             FREE(ObjFunction, object);
         } break;
 
-        case OBJ_NATIVE: { FREE(ObjNative, object); } break;
+        case OBJ_NATIVE:   { FREE(ObjNative, object); } break;
 
         case OBJ_STRING:
         {
@@ -176,6 +175,12 @@ blackenObject(Obj *object)
         case OBJ_NATIVE:
         case OBJ_STRING:
             break;
+
+        case OBJ_CLASS:
+        {
+            ObjClass *klass = (ObjClass *)object;
+            markObject((Obj *)klass->name);
+        } break;
 
         // Each closure has a reference to the bare function it wraps, as well as an array of pointers to the
         // upvalues it captures. We trace all of those.

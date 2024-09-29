@@ -70,6 +70,8 @@ typedef enum
     OP_CLOSE_UPVALUE,
     /// @brief This op code means return from a function.
     OP_RETURN,
+    /// @brief instruction to create a new class object at runtime.
+    OP_CLASS,
 } OpCode;
 
 typedef struct

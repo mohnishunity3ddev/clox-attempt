@@ -420,7 +420,7 @@ parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
     }
 }
 
-/// @brief Creates a constant for an identifier and returns its index
+/// @brief Creates a constant for an identifier and returns its index. constant gets pushed to stack.
 /// @param name Pointer to the Token representing the identifier
 /// @return Index of the created constant
 static u8
@@ -533,6 +533,7 @@ addLocal(Token name)
         error("Too many local variables inside the current-scope/function.");
         return;
     }
+
     Local *local = &current->locals[current->localCount++];
     local->name = name;
     local->depth = UNINITIALIZED_MARKER;
@@ -541,8 +542,9 @@ addLocal(Token name)
 
 /// @brief Declares a new local variable in the current scope, add to locals list.
 static void
-declareLocalVariable()
+declareVariable()
 {
+    // if global variable, return
     if (current->scopeDepth == 0)
         return;
 
@@ -556,10 +558,12 @@ declareLocalVariable()
         {
             break;
         }
+
         if (identifiersEqual(name, &local->name)) {
             error("Already a variable with the same name inside this scope.");
         }
     }
+
     // add local to the locals list.
     addLocal(*name);
 }
@@ -572,7 +576,7 @@ parseVariable(const char *errorMessage)
 {
     consume(TOKEN_IDENTIFIER, errorMessage);
 
-    declareLocalVariable();
+    declareVariable();
 
     // global variables have scope = 0.
     if (current->scopeDepth > 0) return 0;
@@ -588,6 +592,7 @@ markInitialized()
 {
     if (current->scopeDepth == 0)
         return;
+
     current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
@@ -600,6 +605,7 @@ defineVariable(u8 global)
         markInitialized();
         return;
     }
+    
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
@@ -618,6 +624,7 @@ argumentList()
             argCount++;
         } while (match(TOKEN_COMMA));
     }
+
     consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments.");
     return argCount;
 }
@@ -833,6 +840,21 @@ function(FunctionType type)
     }
 }
 
+static void
+classDeclaration()
+{
+    consume(TOKEN_IDENTIFIER, "Expected a class name");
+    // expecteed a name given for the class.
+    u8 classNameIndex = identifierConstant(&parser.previous);
+    declareVariable();
+
+    emitBytes(OP_CLASS, classNameIndex);
+    defineVariable(classNameIndex);
+
+    consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");
+    consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
+}
+
 /// @brief Compiles a function declaration statement
 static void
 functionDeclaration()
@@ -1018,13 +1040,16 @@ synchronize()
 static void
 declaration()
 {
-    if (match(TOKEN_FUN)) {
+    if (match(TOKEN_CLASS)) {
+        classDeclaration();
+    } else if (match(TOKEN_FUN)) {
         functionDeclaration();
     } else if (match(TOKEN_VAR)) {
         varDeclaration();
     } else {
         statement();
     }
+
     if (parser.panicMode) {
         synchronize();
     }

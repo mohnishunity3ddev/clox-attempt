@@ -1,0 +1,6 @@
+fun cc() {
+    class klass {}
+    return klass;
+}
+
+print cc();

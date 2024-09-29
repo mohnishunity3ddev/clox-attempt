@@ -11,14 +11,17 @@
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 #define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_NATIVE(value)  isObjType(value, OBJ_NATIVE)
+#define IS_CLASS(value)  isObjType(value, OBJ_CLASS)
 
 #define AS_STRING(value)  ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value) ((ObjFunction *)AS_OBJ(value))
 #define AS_CLOSURE(value) ((ObjClosure *)AS_OBJ(value))
 #define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
+#define AS_CLASS(value) ((ObjClass *)AS_OBJ(value))
 
 typedef enum {
+    OBJ_CLASS,
     OBJ_UPVALUE,
     OBJ_CLOSURE,
     OBJ_FUNCTION,
@@ -41,6 +44,8 @@ struct ObjString {
     char *chars;
     u32 hash;
 };
+
+// ------------------------------------------------------------------------------------------------------------------
 
 /// @brief Describes the runtime representation of a function object.
 ///        This struct encapsulates all information needed to execute a function, including its code, parameters,
@@ -70,6 +75,9 @@ typedef struct
     ///        `NULL` name.
     ObjString *name;
 } ObjFunction;
+
+// ------------------------------------------------------------------------------------------------------------------
+
 /// @brief Describes the runtime representation of an upvalue object.
 ///        Upvalues are used to capture variables from the enclosing scope that remain in use even after the parent
 ///        function has returned. They allow closures to keep access to variables from their defining context.
@@ -94,6 +102,8 @@ struct ObjUpvalue
     ///        on the stack which need to be accessed way after its lifetime's meant to be.
     ObjUpvalue *next;
 };
+
+// ------------------------------------------------------------------------------------------------------------------
 
 /// @brief Represents a closure object in the runtime.
 ///        A closure is a function combined with the environment in which it was declared.
@@ -120,6 +130,14 @@ typedef struct
     int upvalueCount;
 } ObjClosure;
 
+// ------------------------------------------------------------------------------------------------------------------
+
+typedef struct {
+    Obj obj;
+    ObjString *name;
+} ObjClass;
+
+// ------------------------------------------------------------------------------------------------------------------
 // NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
 // execute directly in C in VM. For example - sqrtf, atan2, clock etc.
 typedef Value (*NativeFunc)(int argCount, Value *args);
@@ -127,13 +145,23 @@ typedef struct {
     Obj obj;
     NativeFunc function;
 } ObjNative;
+// ------------------------------------------------------------------------------------------------------------------
 
+// ------------------------------------------------------------------------------------------------------------------
 static inline bool
 isObjType(Value value, ObjType type)
 {
     bool result = IS_OBJ(value) && AS_OBJ(value)->type == type;
     return result;
 }
+// ------------------------------------------------------------------------------------------------------------------
+
+// ------------------------------------------------------------------------------------------------------------------
+
+/// @brief create a new class object
+/// @param name name of the class
+/// @return pointer to the newly created class object.
+ObjClass *newClass(ObjString *name);
 
 /// @brief creates a new upvalue object.
 /// @param slot address of the slot where the closed-over variable lives. slot is the location on the stack where

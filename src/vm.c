@@ -176,8 +176,8 @@ run()
             // -----------------------------------------------------------------------------------
             case OP_GET_LOCAL:
             {
-                u8 slot = READ_BYTE();
-                Value val = frame->slots[slot];
+                u8 localIndex = READ_BYTE();
+                Value val = frame->slots[localIndex];
                 if (IS_NIL(val)) {
                     runtimeError("Trying to access an uninitialized variable");
                     return INTERPRET_RUNTIME_ERROR;
@@ -413,6 +413,12 @@ run()
                 frame = &vm.frames[vm.frameCount - 1];
             } break;
             // -----------------------------------------------------------------------------------
+            case OP_CLASS:
+            {
+                ObjString *klassName = READ_STRING();
+                Value klassValue = OBJ_VAL(newClass(klassName));
+                push(klassValue);
+            } break;
         }
     }
 

@@ -38,7 +38,15 @@
         "optional": "c",
         "type_traits": "c",
         "xlocmon": "c",
-        "xtr1common": "c"
+        "xtr1common": "c",
+        "*.rh": "c",
+        "compare": "c",
+        "locale": "c",
+        "ostream": "c",
+        "xlocinfo": "c",
+        "xlocnum": "c",
+        "xloctime": "c",
+        "xmemory": "c"
     },
     "files.trimTrailingWhitespace": true,
     "editor.renderLineHighlight": "all",

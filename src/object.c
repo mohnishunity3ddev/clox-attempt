@@ -103,6 +103,13 @@ newNative(NativeFunc function)
     return native;
 }
 
+ObjClass *newClass(ObjString *name)
+{
+    ObjClass *klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
+    klass->name = name;
+    return klass;
+}
+
 ObjString *
 takeString(char *chars, int length)
 {
@@ -169,6 +176,7 @@ printObject(Value value)
 {
     switch(OBJ_TYPE(value))
     {
+        case OBJ_CLASS:     { printf("%s", AS_CLASS(value)->name->chars); } break;
         case OBJ_UPVALUE:   { printf("upvalue"); }                          break;
         case OBJ_CLOSURE:   { printFunction(AS_CLOSURE(value)->function); } break;
         case OBJ_FUNCTION:  { printFunction(AS_FUNCTION(value)); }          break;
