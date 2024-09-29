@@ -154,7 +154,7 @@ tableDelete(Table *table, ObjString *key)
     Entry *entry = findEntry(table->entries, table->capacity, key);
     if (entry->key == NULL)
         return false;
-    
+
     // Place the tombstone in place of the deleted entry, to make sure collision chains are steady.
     entry->key = NULL;
     entry->value = BOOL_VAL(true);

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "chunk.h"
 #include "memory.h"
+#include "vm.h"
 
 void
 initLinesArray(LineArray *lines)
@@ -117,7 +118,15 @@ writeChunk(Chunk *chunk, u8 byte, int line)
 int
 addConstant(Chunk *chunk, Value value)
 {
+    // IMPORTANT: NOTE:
+    // pushing and popping value on to the vm stack before writing to constant array.
+    // doing this because:
+    // constants array is a dynamic array, it could be that the array can issue a realloc if it's capacity is full
+    // which can trigger the GC. The GC finds the heap allocated obj in the value provided here to be unreachable
+    // and thus sweeps it. which I don't want to do until I have added it safely in the constants table.
+    push(value);
     writeValueArray(&chunk->constants, value);
+    pop();
 
     int index = chunk->constants.count - 1;
     return index;

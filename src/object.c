@@ -50,7 +50,11 @@ allocateStringObject(char *chars, int length, u32 hash)
 
     // NOTE: the vm.strings is a hashset or table of unique strings. That's all we care about. so we fill them with
     // null values.
+    // NOTE: pushing the string object to the stack so that it survives the GC sweep if invoked by adding an entry
+    // to the hashtable (in case it needs to be resized).
+    push(OBJ_VAL(string));
     tableSet(&vm.strings, string, NIL_VAL);
+    pop();
     return string;
 }
 

@@ -33,8 +33,9 @@ isFalsey(Value value)
 static void
 concatenate()
 {
-    ObjString *b = AS_STRING(pop());
-    ObjString *a = AS_STRING(peek(0));
+    // peeking here since I want to keep it safe from the GC cleaning it up.
+    ObjString *b = AS_STRING(peek(0));
+    ObjString *a = AS_STRING(peek(1));
     int lenA = a->length;
     int lenB = b->length;
     int totalLength = lenA + lenB;
@@ -43,7 +44,9 @@ concatenate()
     memcpy(str + lenA, b->chars, lenB);
     str[totalLength] = '\0';
     ObjString *result = takeString(str, totalLength);
-    setTop(OBJ_VAL((Obj *)result));
+    pop();
+    pop();
+    push(OBJ_VAL((Obj *)result));
 }
 
 static void
