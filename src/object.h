@@ -39,39 +39,72 @@ struct ObjString {
     u32 hash;
 };
 
-/// @brief describes the runtime representation of a function
-typedef struct {
-    /// @brief base class obj header.
+/// @brief Describes the runtime representation of a function object.
+///        This struct encapsulates all information needed to execute a function, including its code, parameters,
+///        and metadata.
+typedef struct
+{
+    /// @brief The base class object header for a function object.
+    ///        This is necessary for the function to be treated as an object in the language's runtime (e.g., for
+    ///        garbage collection).
     Obj obj;
-    /// @brief Number of parameters the function expects.
+
+    /// @brief The number of parameters the function expects to receive.
+    ///        This is used to verify argument count when the function is called and to set up the function's stack
+    ///        frame.
     int arity;
-    /// @brief number of upvalues (variables inside a nested function which refer to local variables in its
-    ///        enclosing/parent function).
+
+    /// @brief The number of upvalues that the function uses. Gets set by the compiler at backend.
     int upvalueCount;
-    /// @brief chunk of code this function has. A function gets to have its own chunk.
+
+    /// @brief The chunk of bytecode that this function represents.
+    ///        The chunk contains the compiled instructions and constants for the function, forming the executable
+    ///        part of the function.
     Chunk chunk;
-    /// @brief describes the name of the function
+
+    /// @brief The name of the function (if available).
+    ///        This is used for debugging, error reporting, or profiling purposes. Anonymous functions may have a
+    ///        `NULL` name.
     ObjString *name;
 } ObjFunction;
 
-/// @brief runtime representation of upvalues.
-///        upvalues manage closed over variables in a nested function which have been thrown away when the parent
-///        functions that they are declared in return after executing. So, upvalues should be on the heap.
-typedef struct {
-    /// @brief  obj header
+/// @brief Describes the runtime representation of an upvalue object.
+///        Upvalues are used to capture variables from the enclosing scope that remain in use even after the parent
+///        function has returned. They allow closures to keep access to variables from their defining context.
+typedef struct
+{
+    /// @brief The base class object header for the upvalue.
+    ///        As upvalues are objects, this header enables them to integrate with the language’s object model.
     Obj obj;
-    /// @brief points to the closed-over variable. when the closed-over variables gets assigned a new value, then
-    ///        we get to know since this points to the variable not a copy of the variable.
+
+    /// @brief A pointer to the closed-over variable's memory location.
+    ///        Instead of storing a copy of the variable, the upvalue holds a reference to the original variable,
+    ///        ensuring that updates to the variable are visible to all closures that share the upvalue.
     Value *location;
 } ObjUpvalue;
 
-/// @brief runtime wrappers for functions.
-typedef struct {
+/// @brief Represents a closure object in the runtime.
+///        A closure is a function combined with the environment in which it was declared.
+///        It "closes over" variables from its outer scope (upvalues) and keeps them alive beyond the life of the
+///        scope.
+typedef struct
+{
+    /// @brief The base class object header for a closure.
+    ///        This ensures that closures are recognized as objects by the runtime and can be managed (e.g., for
+    ///        memory management).
     Obj obj;
+
+    /// @brief The function that this closure wraps.
+    ///        The function contains the compiled bytecode and other metadata, while the closure keeps the
+    ///        necessary context (upvalues) to execute it.
     ObjFunction *function;
-    /// @brief  array of upvalues that the closure holds on to.
-    ///         different closures will have different number of upvalues, so we need a dynamic array.
+
+    /// @brief An array of pointers to upvalues that the closure has captured.
+    ///        Each upvalue corresponds to a variable from an outer function that remains in use by the closure.
+    ///        The number of upvalues varies depending on the function, so the array is dynamically sized.
     ObjUpvalue **upvalues;
+
+    /// @brief The number of upvalues captured by this closure. used at runtime in the virtual machine.
     int upvalueCount;
 } ObjClosure;
 

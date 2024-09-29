@@ -38,35 +38,55 @@ typedef enum
 
 typedef void (*ParseFn)(bool canAssign);
 
-typedef struct
-{
+/// @brief Defines a rule for parsing expressions
+typedef struct {
+    /// @brief Function pointer for prefix parse rule
     ParseFn prefix;
+    /// @brief Function pointer for infix parse rule
     ParseFn infix;
+    /// @brief Precedence level of the rule
     Precedence precedence;
 } ParseRule;
 
+/// @brief Represents a local variable in the compiler
 typedef struct {
+    /// @brief The token representing the variable's name
     Token name;
+    /// @brief The depth of the scope in which the variable is declared
     int depth;
 } Local;
 
+/// @brief Represents an upvalue (closed-over variable) in the compiler
 typedef struct {
+    /// @brief Index of the upvalue in the upvalues list of the compiler struct this is part of
     u8 index;
+    /// @brief Flag indicating if the upvalue is local to the immediately enclosing function
     bool isLocal;
 } Upvalue;
 
+/// @brief Enumerates the types of functions that can be compiled
 typedef enum {
+    /// @brief User-defined function
     TYPE_FUNCTION_USER_DEFINED,
+    /// @brief The main function of the program
     TYPE_FUNCTION_MAIN,
 } FunctionType;
 
+/// @brief Represents the state of the compiler during compilation
 struct Compiler {
+    /// @brief Pointer to the enclosing compiler (for nested functions)
     Compiler *enclosing;
+    /// @brief The function being compiled
     ObjFunction *function;
+    /// @brief The type of the function being compiled
     FunctionType type;
+    /// @brief Array of local variables in the current scope
     Local locals[UINT8_COUNT];
+    /// @brief Count of local variables in the current scope
     int localCount;
+    /// @brief Array of upvalues for the function
     Upvalue upvalues[UINT8_COUNT];
+    /// @brief Current depth of nested scopes
     int scopeDepth;
 };
 
@@ -289,6 +309,9 @@ patchJump(int offset)
     currentChunk()->code[offset+1] = jump & 0xff;
 }
 
+/// @brief Initializes the compiler structure for a new function compilation
+/// @param compiler Pointer to the Compiler structure to initialize
+/// @param funcType Type of the function being compiled
 static void
 initCompiler(Compiler *compiler, FunctionType funcType)
 {
@@ -309,6 +332,8 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->name.length = 0;
 }
 
+/// @brief Finalizes the current function compilation
+/// @return Pointer to the compiled ObjFunction
 static ObjFunction *
 endCompiler()
 {
@@ -328,12 +353,14 @@ endCompiler()
     return function;
 }
 
+/// @brief Increases the scope depth when entering a new block
 static void
 beginScope()
 {
     current->scopeDepth++;
 }
 
+/// @brief Decreases the scope depth and emits code to pop local variables
 static void
 endScope()
 {
@@ -349,6 +376,8 @@ endScope()
     emitBytes(OP_POPN, (u8)popCount);
 }
 
+/// @brief Parses an expression with a given precedence level
+/// @param lowestPrecedenceAllowed The lowest precedence level allowed for this expression
 static void
 parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
 {
@@ -375,6 +404,9 @@ parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
     }
 }
 
+/// @brief Creates a constant for an identifier and returns its index
+/// @param name Pointer to the Token representing the identifier
+/// @return Index of the created constant
 static u8
 identifierConstant(Token *name)
 {
@@ -383,6 +415,10 @@ identifierConstant(Token *name)
     return constantIndex;
 }
 
+/// @brief Compares two identifiers for equality
+/// @param a Pointer to the first Token
+/// @param b Pointer to the second Token
+/// @return true if identifiers are equal, false otherwise
 static bool
 identifiersEqual(Token *a, Token *b)
 {
@@ -392,6 +428,10 @@ identifiersEqual(Token *a, Token *b)
     return areEqual;
 }
 
+/// @brief Resolves a local variable in the current function's scope
+/// @param compiler Pointer to the current Compiler
+/// @param name Pointer to the Token representing the variable name
+/// @return Index of the local variable, or -1 if not found
 static int
 resolveLocal(Compiler *compiler, Token *name)
 {
@@ -410,43 +450,64 @@ resolveLocal(Compiler *compiler, Token *name)
     return result;
 }
 
+/// @brief Adds an upvalue to the current function's upvalue list
+/// @param compiler Pointer to the current Compiler
+/// @param localVarIndex Index of the local variable in the enclosing function
+/// @param isLocal true if the variable is local to the immediately enclosing function
+/// @return Index of the added upvalue
 static int
 addUpvalue(Compiler *compiler, u8 localVarIndex, bool isLocal)
 {
+    // is it an upvalue already there in the list.
     int upvalueCount = compiler->function->upvalueCount;
     for (int i = 0; i < upvalueCount; ++i)
     {
         Upvalue *upvalue = &compiler->upvalues[i];
-        if (upvalue->index == localVarIndex && upvalue->isLocal == isLocal) {
+        if (upvalue->index == localVarIndex &&
+            upvalue->isLocal == isLocal) {
             return i;
         }
     }
+
     if (upvalueCount == UINT8_COUNT) {
         error("Too many unique closure variables in function");
         return 0;
     }
+
+    // add upvalue to the list.
     compiler->upvalues[upvalueCount].isLocal = isLocal;
     compiler->upvalues[upvalueCount].index = localVarIndex;
     return compiler->function->upvalueCount++;
 }
 
+/// @brief Resolves an upvalue in the current or enclosing functions
+/// @param compiler Pointer to the current Compiler
+/// @param name Pointer to the Token representing the variable name
+/// @return Index of the resolved upvalue, or -1 if not found
 static int
 resolveUpvalue(Compiler *compiler, Token *name)
 {
     if (compiler->enclosing == NULL)
         return -1;
-    int local = resolveLocal(compiler->enclosing, name);
-    if (local != -1) {
-        return addUpvalue(compiler, (u8)local, true);
+
+    Compiler *enclosingCompiler = compiler->enclosing;
+    // is it a local in an immediate enclosing function
+    int localsIndex = resolveLocal(enclosingCompiler, name);
+    if (localsIndex != -1) {
+        return addUpvalue(compiler, (u8)localsIndex, true);
     }
 
+    // if not, look up if it is referencing variable declared in parent functions hierarchy.
     int upvalue = resolveUpvalue(compiler->enclosing, name);
     if (upvalue != -1) {
         return addUpvalue(compiler, (u8)upvalue, false);
     }
+    // this is not an upvalue.
     return -1;
 }
 
+/// @brief Adds a new local variable to the current function
+/// @param name Token representing the variable name
 static void
 addLocal(Token name)
 {
@@ -459,11 +520,14 @@ addLocal(Token name)
     local->depth = UNINITIALIZED_MARKER;
 }
 
+/// @brief Declares a new local variable in the current scope, add to locals list.
 static void
 declareLocalVariable()
 {
     if (current->scopeDepth == 0)
         return;
+
+    // is it already there in the locals list.
     Token *name = &parser.previous;
     for (int i = current->localCount - 1; i >= 0; i--)
     {
@@ -477,20 +541,29 @@ declareLocalVariable()
             error("Already a variable with the same name inside this scope.");
         }
     }
+    // add local to the locals list.
     addLocal(*name);
 }
 
+/// @brief Parses a variable declaration and returns its constant index
+/// @param errorMessage Error message to display if parsing fails
+/// @return Constant index of the parsed variable
 static u8
 parseVariable(const char *errorMessage)
 {
     consume(TOKEN_IDENTIFIER, errorMessage);
+
     declareLocalVariable();
-    if (current->scopeDepth > 0)
-        return 0;
+
+    // global variables have scope = 0.
+    if (current->scopeDepth > 0) return 0;
+
+    // make new constant of the var name, return the constant index.
     u8 constantIndex = identifierConstant(&parser.previous);
     return constantIndex;
 }
 
+/// @brief Marks the most recently declared local variable as initialized
 static inline void
 markInitialized()
 {
@@ -499,6 +572,8 @@ markInitialized()
     current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
+/// @brief Emits bytecode to define a global variable, initialize if just local variable
+/// @param global Index of the global variable in the constant table, unused if local variable.
 static void
 defineVariable(u8 global)
 {
@@ -509,6 +584,8 @@ defineVariable(u8 global)
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
+/// @brief Parses function arguments and returns the argument count
+/// @return Number of arguments parsed
 static u8
 argumentList()
 {
@@ -526,6 +603,8 @@ argumentList()
     return argCount;
 }
 
+/// @brief Compiles a binary operation
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 binary(bool canAssign)
 {
@@ -549,6 +628,8 @@ binary(bool canAssign)
     }
 }
 
+/// @brief Compiles a function call
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 call(bool canAssign)
 {
@@ -556,6 +637,8 @@ call(bool canAssign)
     emitBytes(OP_CALL, argCount);
 }
 
+/// @brief Compiles a grouping expression (parentheses)
+/// @param canAssign true if the expression can be assigned to, unused here.
 static void
 grouping(bool canAssign)
 {
@@ -563,6 +646,8 @@ grouping(bool canAssign)
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
+/// @brief Compiles a number literal
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 number(bool canAssign)
 {
@@ -570,6 +655,8 @@ number(bool canAssign)
     emitConstant(NUMBER_VAL(value));
 }
 
+/// @brief Compiles a logical AND operation
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 and_(bool canAssign)
 {
@@ -579,6 +666,8 @@ and_(bool canAssign)
     patchJump(endJump);
 }
 
+/// @brief Compiles a logical OR operation
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 or_(bool canAssign)
 {
@@ -590,6 +679,8 @@ or_(bool canAssign)
     patchJump(endJump);
 }
 
+/// @brief Compiles a unary operation
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 unary(bool canAssign)
 {
@@ -603,6 +694,8 @@ unary(bool canAssign)
     }
 }
 
+/// @brief Compiles a literal (true, false, nil)
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 literal(bool canAssign)
 {
@@ -615,6 +708,8 @@ literal(bool canAssign)
     }
 }
 
+/// @brief Compiles a string literal
+/// @param canAssign true if the expression can be assigned to, Unused here.
 static void
 string(bool canAssign)
 {
@@ -623,19 +718,25 @@ string(bool canAssign)
     emitConstant(stringValue);
 }
 
+/// @brief Compiles a variable reference or assignment, variable can be local, global or an upvalue in case of closures.
+/// @param name Token representing the variable name
+/// @param canAssign true if the expression can be assigned to
 static void
 namedVariable(Token name, bool canAssign)
 {
     u8 getOp, setOp;
+    // referenced variable can be a local inside the scope.
     int arg = resolveLocal(current, &name);
     if (arg != -1) {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
     } else
+    // variable referenced can be an upvalue in enclosing functions.
     if ((arg = resolveUpvalue(current, &name)) != -1) {
         getOp = OP_GET_UPVALUE;
         setOp = OP_SET_UPVALUE;
     } else {
+        // referenced variable can be a global variable.
         getOp = OP_GET_GLOBAL;
         setOp = OP_SET_GLOBAL;
         arg = stringValueIndex(&mainFunctionChunk->constants, name.start, name.length);
@@ -648,7 +749,7 @@ namedVariable(Token name, bool canAssign)
             }
         }
     }
-
+    // if we are assigning value, set it otherwise access it.
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
         emitBytes(setOp, (u8)arg);
@@ -657,18 +758,22 @@ namedVariable(Token name, bool canAssign)
     }
 }
 
+/// @brief Compiles a variable expression
+/// @param canAssign true if the expression can be assigned to
 static void
 variable(bool canAssign)
 {
     namedVariable(parser.previous, canAssign);
 }
 
+/// @brief Compiles any expression
 static void
 expression()
 {
     parseExpressionWithPrecedence(PREC_ASSIGNMENT);
 }
 
+/// @brief Compiles a block of statements
 static void
 block()
 {
@@ -678,6 +783,8 @@ block()
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after a block.");
 }
 
+/// @brief Compiles a function declaration
+/// @param type Type of the function being compiled
 static void
 function(FunctionType type)
 {
@@ -707,6 +814,7 @@ function(FunctionType type)
     }
 }
 
+/// @brief Compiles a function declaration statement
 static void
 functionDeclaration()
 {
@@ -716,6 +824,7 @@ functionDeclaration()
     defineVariable(global);
 }
 
+/// @brief Compiles a variable declaration statement
 static void
 varDeclaration()
 {
@@ -862,6 +971,7 @@ statement()
     }
 }
 
+/// @brief Synchronizes the parser after an error
 static void
 synchronize()
 {
@@ -901,6 +1011,9 @@ declaration()
     }
 }
 
+/// @brief Main compilation function that processes the entire source code
+/// @param source Pointer to the source code string
+/// @return Pointer to the compiled ObjFunction, or NULL if compilation failed
 ObjFunction *
 compile(const char *source)
 {
