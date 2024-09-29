@@ -8,14 +8,21 @@
 #include "debug.h"
 #endif
 
+#define GC_HEAP_GROW_FACTOR 2
+
 void *
 reallocate(void *pointer, size_t oldSize, size_t newSize)
 {
+    vm.bytesAllocated += newSize - oldSize;
     if (newSize > oldSize) {
 #ifdef DEBUG_STRESS_GC
         // running the GC right before we want to allocate more memory. A good stress test here.
         collectGarbage();
 #endif
+
+        if (vm.bytesAllocated > vm.nextGC) {
+            collectGarbage();
+        }
     }
 
     if (newSize == 0) {
@@ -242,6 +249,7 @@ collectGarbage()
 {
 #ifdef DEBUG_LOG_GC
     printf("-- gc begin\n");
+    size_t before = vm.bytesAllocated;
 #endif
 
     markRoots();
@@ -255,8 +263,12 @@ collectGarbage()
     // we want to sweep off all the 'white' objects which are not reachable by the GC.
     sweep();
 
+    vm.nextGC = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
+
 #ifdef DEBUG_LOG_GC
     printf("-- gc end\n");
+    printf("   collected %zu bytes (from %zu to %zu) next GC invocation at %zu\n",
+           (before - vm.bytesAllocated), before, vm.bytesAllocated, vm.nextGC);
 #endif
 }
 

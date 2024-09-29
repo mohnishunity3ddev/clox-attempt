@@ -62,7 +62,7 @@ typedef struct
 
     /// @brief a hashtable with key = names of the global variables and the value they represent.
     Table globals;
-    
+
     Obj *objects;
 
     /// @brief head of the list of upvalues sorted based on increasing stack size. Each open upvalue points to the
@@ -82,6 +82,11 @@ typedef struct
     int grayCapacity;
     /// @brief stack holding obj pointers (heap allocated).
     Obj **grayStack;
+
+    /// @brief the number of memory allocated till now.
+    size_t bytesAllocated;
+    /// @brief the threshold which when crossed invokes the GC's mark-sweep.
+    size_t nextGC;
 } VM;
 
 typedef enum
