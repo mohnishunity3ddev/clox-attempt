@@ -250,7 +250,8 @@ run()
                     pop(); // Instance
                     push(value);
                 } else {
-                    runtimeError("Undefined property '%s'", name->chars);
+                    runtimeError("instance of type '%s' does not have property '%s'",
+                                 instance->klass->name->chars, name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
             } break;
@@ -262,7 +263,7 @@ run()
                     runtimeError("Can only set values to fields");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                
+
                 ObjInstance *instance = AS_INSTANCE(peek(1));      // the instance whose field is being set.
                 ObjString *fieldName = READ_STRING();              // the field/property of the instance we want to set the value to.
                 tableSet(&instance->fields, fieldName, peek(0));   // value meant for the object field.
