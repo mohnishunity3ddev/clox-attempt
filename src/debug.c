@@ -147,6 +147,9 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_GET_UPVALUE:    { result = byteInstruction("OP_GET_UPVALUE", chunk, offset); }           break;
         case OP_SET_UPVALUE:    { result = byteInstruction("OP_SET_UPVALUE", chunk, offset); }           break;
 
+        case OP_GET_PROPERTY:   { result = constantInstruction("OP_GET_PROPERTY", chunk, offset); }      break;
+        case OP_SET_PROPERTY:   { result = constantInstruction("OP_SET_PROPERTY", chunk, offset); }      break;
+
         case OP_NEGATE:         { result = simpleInstruction("OP_NEGATE", offset); }                     break;
         case OP_NOT:            { result = simpleInstruction("OP_NOT", offset); }                        break;
 

@@ -45,6 +45,13 @@ freeObject(Obj *object)
 
     switch(object->type)
     {
+        case OBJ_INSTANCE:
+        {
+            ObjInstance *instance = (ObjInstance *)object;
+            freeTable(&instance->fields);
+            FREE(OBJ_INSTANCE, object);
+        } break;
+
         case OBJ_CLASS:   { FREE(ObjClass, object); } break;
 
         case OBJ_UPVALUE: { FREE(ObjUpvalue, object); } break;
@@ -175,6 +182,15 @@ blackenObject(Obj *object)
         case OBJ_NATIVE:
         case OBJ_STRING:
             break;
+
+        case OBJ_INSTANCE:
+        {
+            ObjInstance *instance = (ObjInstance *)object;
+            // if the instance is alive, we need to keep its class around.
+            markObject((Obj *)instance->klass);
+            // we also need to keep al the objects referenced by its fields.
+            markTable(&instance->fields);
+        } break;
 
         case OBJ_CLASS:
         {

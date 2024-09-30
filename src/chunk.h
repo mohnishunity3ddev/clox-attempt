@@ -35,6 +35,9 @@ typedef enum
     OP_SET_GLOBAL,
     OP_SET_UPVALUE,
 
+    OP_GET_PROPERTY,
+    OP_SET_PROPERTY,
+
     OP_EQUAL,
     OP_NOT_EQUAL,
     OP_GREATER,

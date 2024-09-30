@@ -4,6 +4,7 @@
 #include "common.h"
 #include "chunk.h"
 #include "value.h"
+#include "table.h"
 
 #define OBJ_TYPE(value)   (AS_OBJ(value)->type)
 
@@ -12,6 +13,7 @@
 #define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
 #define IS_NATIVE(value)  isObjType(value, OBJ_NATIVE)
 #define IS_CLASS(value)  isObjType(value, OBJ_CLASS)
+#define IS_INSTANCE(value)  isObjType(value, OBJ_INSTANCE)
 
 #define AS_STRING(value)  ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
@@ -19,8 +21,10 @@
 #define AS_CLOSURE(value) ((ObjClosure *)AS_OBJ(value))
 #define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
 #define AS_CLASS(value) ((ObjClass *)AS_OBJ(value))
+#define AS_INSTANCE(value) ((ObjInstance *)AS_OBJ(value))
 
 typedef enum {
+    OBJ_INSTANCE,
     OBJ_CLASS,
     OBJ_UPVALUE,
     OBJ_CLOSURE,
@@ -132,10 +136,22 @@ typedef struct
 
 // ------------------------------------------------------------------------------------------------------------------
 
+/// @brief represents a class object
 typedef struct {
     Obj obj;
+    /// @brief name of the class.
     ObjString *name;
 } ObjClass;
+
+/// @brief represents an instance object.
+typedef struct {
+    Obj obj;
+    /// @brief class object of which this is an instance.
+    ObjClass *klass;
+    /// @brief hash table which stores the fields of this instance. We can add fields to an instance at runtime.
+    ///        Name of the field is key to the hash table, value can be any object type.
+    Table fields;
+} ObjInstance;
 
 // ------------------------------------------------------------------------------------------------------------------
 // NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
@@ -157,6 +173,11 @@ isObjType(Value value, ObjType type)
 // ------------------------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------------------------
+
+/// @brief creates a new instance object.
+/// @param klass the class this is an instance of
+/// @return pointer to the new instance object.
+ObjInstance *newInstance(ObjClass *klass);
 
 /// @brief create a new class object
 /// @param name name of the class

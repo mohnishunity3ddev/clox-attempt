@@ -9,9 +9,9 @@
 // #include <string.h>
 
 #define DEBUG_PRINT_CODE
-#undef DEBUG_PRINT_CODE
+// #undef DEBUG_PRINT_CODE
 #define DEBUG_TRACE_EXECUTION
-#undef DEBUG_TRACE_EXECUTION
+// #undef DEBUG_TRACE_EXECUTION
 
 #define DEBUG_STRESS_GC
 #undef DEBUG_STRESS_GC

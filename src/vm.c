@@ -230,11 +230,53 @@ run()
             } break;
 
             // -----------------------------------------------------------------------------------
-            case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual); }    break;
-            case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual); }   break;
-            case OP_GREATER:        { BINARY_OP_FUNC(valuesGreater); }  break;
-            case OP_GREATER_EQUAL:  { BINARY_OP_FUNC(!valuesLess); }    break;
-            case OP_LESS:           { BINARY_OP_FUNC(valuesLess); }     break;
+            case OP_GET_PROPERTY:
+            {
+                if (!IS_INSTANCE(peek(0))) {
+                    runtimeError("Only instances can have fields");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // get an instance property. when parsing b.c = 3, b is a variable, compiler emits GET_GLOBAL/LOCAL
+                // on it while parsing which the vm gets and pushes the instance on to the stack prior to getting
+                // here.
+                ObjInstance *instance = AS_INSTANCE(peek(0));
+                // name of the property
+                ObjString *name = READ_STRING();
+
+                // get the value of the property in the fields hashtable keyed by it's name.
+                Value value;
+                if (tableGet(&instance->fields, name, &value)) {
+                    pop(); // Instance
+                    push(value);
+                } else {
+                    runtimeError("Undefined property '%s'", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            } break;
+
+            // -----------------------------------------------------------------------------------
+            case OP_SET_PROPERTY:
+            {
+                if (!IS_INSTANCE(peek(1))) {
+                    runtimeError("Can only set values to fields");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance *instance = AS_INSTANCE(peek(1));      // the instance whose field is being set.
+                ObjString *fieldName = READ_STRING();              // the field/property of the instance we want to set the value to.
+                tableSet(&instance->fields, fieldName, peek(0));   // value meant for the object field.
+                Value value = pop();                               // pop off the value meant for the field.
+                pop();                                             // pop the instance object.
+                push(value);                                       // push the value.
+            } break;
+
+            // -----------------------------------------------------------------------------------
+            case OP_EQUAL:          { BINARY_OP_FUNC(valuesEqual);    } break;
+            case OP_NOT_EQUAL:      { BINARY_OP_FUNC(!valuesEqual);   } break;
+            case OP_GREATER:        { BINARY_OP_FUNC(valuesGreater);  } break;
+            case OP_GREATER_EQUAL:  { BINARY_OP_FUNC(!valuesLess);    } break;
+            case OP_LESS:           { BINARY_OP_FUNC(valuesLess);     } break;
             case OP_LESS_EQUAL:     { BINARY_OP_FUNC(!valuesGreater); } break;
 
             // -----------------------------------------------------------------------------------
@@ -555,6 +597,14 @@ callValue(Value callee, int argCount)
 {
     if (IS_OBJ(callee)) {
         switch(OBJ_TYPE(callee)) {
+            // this gets hit when we try to create an instance of a class. ex: class c{}; var i = c();
+            case OBJ_CLASS:
+            {
+                ObjClass *klass = AS_CLASS(callee);
+                vm.stack.top[-argCount - 1] = OBJ_VAL(newInstance(klass));
+                return true;
+            } break;
+
             case OBJ_CLOSURE:
             {
                 return call(AS_CLOSURE(callee), argCount);

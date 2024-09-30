@@ -111,6 +111,7 @@ static void variable(bool canAssign);
 static void and_(bool canAssign);
 static void or_(bool canAssign);
 static void call(bool canAssign);
+static void dot(bool canAssign);
 static void statement();
 static void declaration();
 
@@ -120,7 +121,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_PERCENTAGE]    = {NULL,     binary, PREC_MOD},
@@ -166,7 +167,6 @@ getRule(TokenType type)
 
 static void expression();
 static ParseRule *getRule(TokenType type);
-static void parseExpressionWithPrecedence(Precedence precedence);
 
 static Chunk *
 currentChunk()
@@ -284,6 +284,9 @@ emitReturn()
     emitByte(OP_RETURN);
 }
 
+/// @brief Add a constant to the constants array for the current compiler.
+/// @param value the value to be added to constants array
+/// @return index into the constants array where the value was added.
 static u8
 makeConstant(Value value)
 {
@@ -404,7 +407,11 @@ parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
         error("Expect expression");
         return;
     }
-    bool canAssign = lowestPrecedenceAllowed <= PREC_ASSIGNMENT;
+
+    // NOTE: avoid assigning a value to an addition exp like a + b = c or a + b.c = 3
+    // prefix rule for '+' will call binary which will again call this function with precedence PREC_TERM + 1 which
+    // will be greater than PREC_ASSIGNMENT, so canAssign will be false.
+    bool canAssign = (PREC_ASSIGNMENT >= lowestPrecedenceAllowed);
     prefixRule_previousToken(canAssign);
     Precedence currentTokenPrecedence = getRule(parser.current.type)->precedence;
 
@@ -420,7 +427,7 @@ parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
     }
 }
 
-/// @brief Creates a constant for an identifier and returns its index. constant gets pushed to stack.
+/// @brief Creates a constant for an identifier and returns its index.
 /// @param name Pointer to the Token representing the identifier
 /// @return Index of the created constant
 static u8
@@ -605,7 +612,7 @@ defineVariable(u8 global)
         markInitialized();
         return;
     }
-    
+
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
@@ -661,6 +668,24 @@ call(bool canAssign)
 {
     u8 argCount = argumentList();
     emitBytes(OP_CALL, argCount);
+}
+
+/// @brief Compiles a dot infix operator when accessing or setting fields of an object instance
+/// @param canAssign true if this expression can be assigned a value(set)
+static void
+dot(bool canAssign)
+{
+    consume(TOKEN_IDENTIFIER, "Expect a property name after '.'");
+    // put the field/property string into the constants array and return the index where it got put.
+    u8 fieldNameIndex = identifierConstant(&parser.previous);
+
+    // a + b.c = 3 should be error.
+    if (canAssign && match(TOKEN_EQUAL)) {
+        expression();
+        emitBytes(OP_SET_PROPERTY, fieldNameIndex);
+    } else {
+        emitBytes(OP_GET_PROPERTY, fieldNameIndex);
+    }
 }
 
 /// @brief Compiles a grouping expression (parentheses)
@@ -768,14 +793,14 @@ namedVariable(Token name, bool canAssign)
         arg = stringValueIndex(&mainFunctionChunk->constants, name.start, name.length);
         if (arg == -1)
         {
-            if(check(TOKEN_LEFT_PAREN)) {
+            if (check(TOKEN_LEFT_PAREN)) {
                 arg = identifierConstant(&parser.previous);
             } else {
                 errorAt(&name, "CompilerError (Undefined global variable)");
             }
         }
     }
-    // if we are assigning value, set it otherwise access it.
+
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
         emitBytes(setOp, (u8)arg);
