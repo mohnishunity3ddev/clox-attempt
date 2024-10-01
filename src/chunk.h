@@ -75,6 +75,8 @@ typedef enum
     OP_RETURN,
     /// @brief instruction to create a new class object at runtime.
     OP_CLASS,
+    /// @brief instruction to create a new method for a class.
+    OP_METHOD,
 } OpCode;
 
 typedef struct

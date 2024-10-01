@@ -88,6 +88,131 @@ defineNative(const char *name, NativeFunc function)
     pop();
 }
 
+
+static bool
+call(ObjClosure *closure, int argCount)
+{
+    if (argCount != closure->function->arity)
+    {
+        runtimeError("Expected %d arguments but got %d.", closure->function->arity, argCount);
+        return false;
+    }
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow!");
+        return false;
+    }
+
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
+    frame->slots = vm.stack.top - argCount - 1;
+    return true;
+}
+
+static bool
+callValue(Value callee, int argCount)
+{
+    if (IS_OBJ(callee)) {
+        switch(OBJ_TYPE(callee)) {
+            // this gets hit when we try to create an instance of a class. ex: class c{}; var i = c();
+            case OBJ_CLASS:
+            {
+                ObjClass *klass = AS_CLASS(callee);
+                vm.stack.top[-argCount - 1] = OBJ_VAL(newInstance(klass));
+                return true;
+            } break;
+
+            case OBJ_CLOSURE:
+            {
+                return call(AS_CLOSURE(callee), argCount);
+            } break;
+
+            case OBJ_NATIVE:
+            {
+                NativeFunc native = AS_NATIVE(callee);
+                Value result = native(argCount, vm.stack.top - argCount);
+                vm.stack.top -= argCount + 1;
+                push(result);
+                return true;
+            } break;
+
+            default: {
+                _assert(!"Should not be here!");
+            } break;
+        }
+    }
+    runtimeError("Can only call functions and classes");
+    return false;
+}
+
+/// @brief generate upvalue for the given value on the stack so closures accessing these stack values are able to
+///        access them even when the stack values have been removed when the function that define them have returned after
+///        execution.
+/// @param local pointer to a value that is currently there on the call stack.
+/// @return return the pointer to the upvalue.
+static ObjUpvalue *
+captureUpvalue(Value *local)
+{
+    ObjUpvalue *prevUpvalue = NULL;
+    ObjUpvalue *upvalue = vm.openUpvalues;
+    // vm.openUpvalues are sorted on decreasing stack size. the head (vm.openUpvalues) is near the top of the
+    // stack.
+    while (upvalue != NULL &&
+           upvalue->location > local)
+    {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    // we found an upvalue which is referencing the same local that we are wanting an upvalue for.
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
+
+    // create a new open value(referencing variables already on the stack) and add it to the openUpvalues list.
+    ObjUpvalue *createdUpvalue = newUpvalue(local);
+    createdUpvalue->next = upvalue;
+    if (prevUpvalue == NULL) {
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue->next = createdUpvalue;
+    }
+
+    return createdUpvalue;
+}
+
+/// @brief hoist the value on the stack slot and additionally close all upvalue that are referencing to stack slots
+///        above the provided one.
+/// @param last pointer to the stack slot that the upvalue refers to
+static void
+closeUpvalues(Value *last)
+{
+    // close all upvalues that are above the value sent it on the stack OR exactly referring to the value sent in
+    // here. walk the openvalue list from top to bottom (stack).
+    while (vm.openUpvalues != NULL &&
+           vm.openUpvalues->location >= last)
+    {
+        ObjUpvalue *upvalue = vm.openUpvalues;
+        upvalue->closed = *upvalue->location; // copy the stack value into the heap memory where the upvalue is stored.
+        upvalue->location = &upvalue->closed; // update the location of the value it is referring to to point to its 'closed' variable.
+        vm.openUpvalues = upvalue->next; // move the head of the openValues list to the next one since this one is closed now.
+    }
+}
+
+static void
+defineMethod(ObjString *name)
+{
+    // objClosure is on top of the stack after compiling method body.
+    Value method = peek(0);
+    // class object is underneath objClosure(which will bind to this class) on stack before compiling methods of a
+    // class declaration in the compiler.
+    ObjClass *klass = AS_CLASS(peek(1));
+    // add method name to class's method hashtable.
+    tableSet(&klass->methods, name, method);
+    // pop the method value off the stack top.
+    pop();
+}
+
 static InterpretResult
 run()
 {
@@ -236,14 +361,12 @@ run()
                     runtimeError("Only instances can have fields");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
-                // get an instance property. when parsing b.c = 3, b is a variable, compiler emits GET_GLOBAL/LOCAL
-                // on it while parsing which the vm gets and pushes the instance on to the stack prior to getting
-                // here.
+                // get an instance property. when parsing b.c = 3, b is a variable(), compiler emits
+                // GET_GLOBAL/LOCAL on it while parsing which the vm gets and pushes the instance on to the stack
+                // prior to getting here.
                 ObjInstance *instance = AS_INSTANCE(peek(0));
                 // name of the property
                 ObjString *name = READ_STRING();
-
                 // get the value of the property in the fields hashtable keyed by it's name.
                 Value value;
                 if (tableGet(&instance->fields, name, &value)) {
@@ -263,7 +386,6 @@ run()
                     runtimeError("Can only set values to fields");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
                 ObjInstance *instance = AS_INSTANCE(peek(1));      // the instance whose field is being set.
                 ObjString *fieldName = READ_STRING();              // the field/property of the instance we want to set the value to.
                 tableSet(&instance->fields, fieldName, peek(0));   // value meant for the object field.
@@ -409,6 +531,21 @@ run()
             } break;
 
             // -----------------------------------------------------------------------------------
+            case OP_CLASS:
+            {
+                ObjString *klassName = READ_STRING();
+                Value klassValue = OBJ_VAL(newClass(klassName));
+                push(klassValue);
+            } break;
+
+            case OP_METHOD:
+            {
+                // read the method name from the constant table.
+                defineMethod(READ_STRING());
+            } break;
+
+            // -----------------------------------------------------------------------------------
+            // create the closure object for the function and leave it on top of VM stack.
             case OP_CLOSURE:
             {
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT());
@@ -448,19 +585,11 @@ run()
                     pop();
                     return INTERPRET_OK;
                 }
-
                 vm.stack.top = frame->slots;
                 int newCount = (int)(vm.stack.top - vm.stack.values);
                 vm.stack.count = newCount;
                 push(result);
                 frame = &vm.frames[vm.frameCount - 1];
-            } break;
-            // -----------------------------------------------------------------------------------
-            case OP_CLASS:
-            {
-                ObjString *klassName = READ_STRING();
-                Value klassValue = OBJ_VAL(newClass(klassName));
-                push(klassValue);
             } break;
         }
     }
@@ -571,116 +700,6 @@ peek(int indexFromLast)
             vm.stack.count > 0 &&
             vm.stack.count >= (indexFromLast + 1));
     return *((vm.stack.top - 1) - indexFromLast);
-}
-
-static bool
-call(ObjClosure *closure, int argCount)
-{
-    if (argCount != closure->function->arity)
-    {
-        runtimeError("Expected %d arguments but got %d.", closure->function->arity, argCount);
-        return false;
-    }
-    if (vm.frameCount == FRAMES_MAX) {
-        runtimeError("Stack overflow!");
-        return false;
-    }
-
-    CallFrame *frame = &vm.frames[vm.frameCount++];
-    frame->closure = closure;
-    frame->ip = closure->function->chunk.code;
-    frame->slots = vm.stack.top - argCount - 1;
-    return true;
-}
-
-static bool
-callValue(Value callee, int argCount)
-{
-    if (IS_OBJ(callee)) {
-        switch(OBJ_TYPE(callee)) {
-            // this gets hit when we try to create an instance of a class. ex: class c{}; var i = c();
-            case OBJ_CLASS:
-            {
-                ObjClass *klass = AS_CLASS(callee);
-                vm.stack.top[-argCount - 1] = OBJ_VAL(newInstance(klass));
-                return true;
-            } break;
-
-            case OBJ_CLOSURE:
-            {
-                return call(AS_CLOSURE(callee), argCount);
-            } break;
-
-            case OBJ_NATIVE:
-            {
-                NativeFunc native = AS_NATIVE(callee);
-                Value result = native(argCount, vm.stack.top - argCount);
-                vm.stack.top -= argCount + 1;
-                push(result);
-                return true;
-            } break;
-
-            default: {
-                _assert(!"Should not be here!");
-            } break;
-        }
-    }
-    runtimeError("Can only call functions and classes");
-    return false;
-}
-
-/// @brief generate upvalue for the given value on the stack so closures accessing these stack values are able to
-///        access them even when the stack values have been removed when the function that define them have returned after
-///        execution.
-/// @param local pointer to a value that is currently there on the call stack.
-/// @return return the pointer to the upvalue.
-static ObjUpvalue *
-captureUpvalue(Value *local)
-{
-    ObjUpvalue *prevUpvalue = NULL;
-    ObjUpvalue *upvalue = vm.openUpvalues;
-    // vm.openUpvalues are sorted on decreasing stack size. the head (vm.openUpvalues) is near the top of the
-    // stack.
-    while (upvalue != NULL &&
-           upvalue->location > local)
-    {
-        prevUpvalue = upvalue;
-        upvalue = upvalue->next;
-    }
-
-    // we found an upvalue which is referencing the same local that we are wanting an upvalue for.
-    if (upvalue != NULL && upvalue->location == local) {
-        return upvalue;
-    }
-
-    // create a new open value(referencing variables already on the stack) and add it to the openUpvalues list.
-    ObjUpvalue *createdUpvalue = newUpvalue(local);
-    createdUpvalue->next = upvalue;
-    if (prevUpvalue == NULL) {
-        vm.openUpvalues = createdUpvalue;
-    } else {
-        prevUpvalue->next = createdUpvalue;
-    }
-
-    return createdUpvalue;
-}
-
-/// @brief hoist the value on the stack slot and additionally close all upvalue that are referencing to stack slots
-///        above the provided one.
-/// @param last pointer to the stack slot that the upvalue refers to
-static void
-closeUpvalues(Value *last)
-{
-    // close all upvalues that are above the value sent it on the stack OR exactly referring to the value sent in
-    // here. walk the openvalue list from top to bottom (stack).
-    while (vm.openUpvalues != NULL &&
-           vm.openUpvalues->location >= last)
-    {
-        ObjUpvalue *upvalue = vm.openUpvalues;
-        upvalue->closed = *upvalue->location; // copy the stack value into the heap memory where the upvalue is stored.
-        upvalue->location = &upvalue->closed; // update the location of the value it is referring to to point to its 'closed' variable.
-        vm.openUpvalues = upvalue->next; // move the head of the openValues list to the next one since this one is closed now.
-    }
 }
 
 void

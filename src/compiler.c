@@ -204,6 +204,7 @@ errorAtCurrent(const char *message)
     errorAt(&(parser.current), message);
 }
 
+/// @brief advance the parser to the next token in the source file.
 static void
 advance()
 {
@@ -217,6 +218,9 @@ advance()
     }
 }
 
+/// @brief advance the parser to the next token if current token is of the expected type.
+/// @param type type of the token, the current parser should be expected to be
+/// @param message error message if current parser token is not of the expected type.
 static void
 consume(TokenType type, const char *message)
 {
@@ -227,12 +231,18 @@ consume(TokenType type, const char *message)
     errorAtCurrent(message);
 }
 
+/// @brief check if current token is of expected type.
+/// @param type the token type to check for
+/// @return true, if current token type is of expected type. false, otherwise.
 static inline bool
 check(TokenType type)
 {
     return (parser.current.type == type);
 }
 
+/// @brief advance to next token if current is of given type.
+/// @param type type of token we expect the current token to be
+/// @return true, if expected token was present. false, otherwise.
 static bool
 match(TokenType type)
 {
@@ -357,7 +367,7 @@ endCompiler()
         disassembleChunk(currentChunk(), chunkName);
     }
 #endif
-
+    // back to the enclosing function. global if defined in the global context.
     current = current->enclosing;
     return function;
 }
@@ -429,7 +439,7 @@ parseExpressionWithPrecedence(Precedence lowestPrecedenceAllowed)
 
 /// @brief Creates a constant for an identifier and returns its index.
 /// @param name Pointer to the Token representing the identifier
-/// @return Index of the created constant
+/// @return Index into the current function codechunk's constant table where this new constant is stored.
 static u8
 identifierConstant(Token *name)
 {
@@ -547,7 +557,7 @@ addLocal(Token name)
     local->isCaptured = false;
 }
 
-/// @brief Declares a new local variable in the current scope, add to locals list.
+/// @brief Declares a new local variable in the current scope, add to locals list. does nothing if global variable.
 static void
 declareVariable()
 {
@@ -769,7 +779,7 @@ string(bool canAssign)
     emitConstant(stringValue);
 }
 
-/// @brief Compiles a variable reference or assignment, variable can be local, global or an upvalue in case of closures.
+/// @brief emits code  OP_GET/SET_LOCAL/GLOBAL/UPVALUE to load a variable with the given name onto the VM stack.
 /// @param name Token representing the variable name
 /// @param canAssign true if the expression can be assigned to
 static void
@@ -834,7 +844,7 @@ block()
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after a block.");
 }
 
-/// @brief Compiles a function declaration
+/// @brief Compiles a function declaration. pushes the closure value on top of vm stack.
 /// @param type Type of the function being compiled
 static void
 function(FunctionType type)
@@ -865,19 +875,44 @@ function(FunctionType type)
     }
 }
 
+/// @brief parse class methods. emits OP_METHOD
+static void
+method()
+{
+    consume(TOKEN_IDENTIFIER, "Expected a method name");
+    // parse method name
+    u8 methodNameIndex = identifierConstant(&parser.previous);
+    // parse method body
+    FunctionType type = TYPE_FUNCTION_USER_DEFINED;
+    function(type);
+    // which class these methods have to bind to. function closure is top of stack at this point(due to function())
+    // abovc. class value under it.
+    emitBytes(OP_METHOD, methodNameIndex);
+}
+
 static void
 classDeclaration()
 {
     consume(TOKEN_IDENTIFIER, "Expected a class name");
+
+    Token className = parser.previous;
+
     // expecteed a name given for the class.
     u8 classNameIndex = identifierConstant(&parser.previous);
-    declareVariable();
+    declareVariable(); // does nothing if global class
 
-    emitBytes(OP_CLASS, classNameIndex);
-    defineVariable(classNameIndex);
+    emitBytes(OP_CLASS, classNameIndex); // pushes the class value on stack
+    defineVariable(classNameIndex);      // pops the class from the stack(OP_DEFINE_GLOBAL)
 
+    namedVariable(className, false);     // push class on stack. useful for binding the methods after this.
     consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");
+    // parse all class methods.
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        method();
+    }
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
+    // parsed all methods, don't need the class. pop it off.
+    emitByte(OP_POP);
 }
 
 /// @brief Compiles a function declaration statement

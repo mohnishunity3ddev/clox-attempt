@@ -141,6 +141,8 @@ typedef struct {
     Obj obj;
     /// @brief name of the class.
     ObjString *name;
+    /// @brief hashtable of the class's methods. Keys are method names, values are closures inside the class scope.
+    Table methods;
 } ObjClass;
 
 /// @brief represents an instance object.

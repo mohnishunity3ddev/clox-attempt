@@ -1,0 +1,14 @@
+// example flow in the vm for this class declaration.
+// class c {
+//     m1() {}
+//     m2() {}
+// }
+// Instruction             |              Stack
+// OP_CLASS                |   | class c |                 global variable
+// OP_DEFINE_GLOBAL        |   | null |                    class c gets popped off.
+// OP_GET_GLOBAL           |   | class c |                 global variable
+// OP_CLOSURE              |   | class c | | func m1 |
+// OP_METHOD               |   | class c |                 func m1 gets popped
+// OP_CLOSURE              |   | class c | | func m2 |
+// OP_METHOD               |   | class c |                 func m2 gets popped
+// OP_POP                  |   | null |

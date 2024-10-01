@@ -52,7 +52,13 @@ freeObject(Obj *object)
             FREE(OBJ_INSTANCE, object);
         } break;
 
-        case OBJ_CLASS:   { FREE(ObjClass, object); } break;
+        case OBJ_CLASS:
+        {
+            ObjClass *klass = (ObjClass *)object;
+            freeTable(&klass->methods);
+            FREE(ObjClass, object);
+        }
+        break;
 
         case OBJ_UPVALUE: { FREE(ObjUpvalue, object); } break;
 
@@ -196,6 +202,8 @@ blackenObject(Obj *object)
         {
             ObjClass *klass = (ObjClass *)object;
             markObject((Obj *)klass->name);
+            // if GC can reach class, then it can reach the class's methods(in turn the methods table).
+            markTable(&klass->methods);
         } break;
 
         // Each closure has a reference to the bare function it wraps, as well as an array of pointers to the
