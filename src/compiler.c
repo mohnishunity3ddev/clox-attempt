@@ -688,7 +688,7 @@ dot(bool canAssign)
     consume(TOKEN_IDENTIFIER, "Expect a property name after '.'");
     // put the field/property string into the constants array and return the index where it got put.
     u8 fieldNameIndex = identifierConstant(&parser.previous);
-
+    
     // a + b.c = 3 should be error.
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();

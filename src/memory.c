@@ -45,6 +45,11 @@ freeObject(Obj *object)
 
     switch(object->type)
     {
+        case OBJ_BOUND_METHOD:
+        {
+            FREE(ObjBoundMethod, object);
+        } break;
+
         case OBJ_INSTANCE:
         {
             ObjInstance *instance = (ObjInstance *)object;
@@ -188,6 +193,13 @@ blackenObject(Obj *object)
         case OBJ_NATIVE:
         case OBJ_STRING:
             break;
+
+        case OBJ_BOUND_METHOD:
+        {
+            ObjBoundMethod *bound = (ObjBoundMethod *)object;
+            markValue(bound->receiver);
+            markObject((Obj *)bound->method);
+        } break;
 
         case OBJ_INSTANCE:
         {

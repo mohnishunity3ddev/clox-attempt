@@ -18,10 +18,6 @@ clockNative(int argCount, Value *args)
     return result;
 }
 
-static bool callValue(Value callee, int argCount);
-static bool call(ObjClosure *closure, int argCount);
-static ObjUpvalue *captureUpvalue(Value *local);
-static void closeUpvalues(Value *last);
 CallFrame *mainFrame;
 
 static bool
@@ -88,7 +84,10 @@ defineNative(const char *name, NativeFunc function)
     pop();
 }
 
-
+/// @brief Call the closure. Push a new callframe to the frame stack for this function call.
+/// @param closure closure object whose function we have to call.
+/// @param argCount the number of arguments passed into the closure
+/// @return true if vm was able to call, false, otherwise.
 static bool
 call(ObjClosure *closure, int argCount)
 {
@@ -114,7 +113,14 @@ callValue(Value callee, int argCount)
 {
     if (IS_OBJ(callee)) {
         switch(OBJ_TYPE(callee)) {
-            // this gets hit when we try to create an instance of a class. ex: class c{}; var i = c();
+            // call a bound method of a class instance.
+            case OBJ_BOUND_METHOD:
+            {
+                ObjBoundMethod *bound = AS_BOUND_METHOD(callee);
+                return call(bound->method, argCount);
+            } break;
+
+            // create a new instance of a class. ex: class c{} var i = c();
             case OBJ_CLASS:
             {
                 ObjClass *klass = AS_CLASS(callee);
@@ -122,11 +128,13 @@ callValue(Value callee, int argCount)
                 return true;
             } break;
 
+            // call a normal function.
             case OBJ_CLOSURE:
             {
                 return call(AS_CLOSURE(callee), argCount);
             } break;
 
+            // call a native function like call, sqrtf available in the c runtime.
             case OBJ_NATIVE:
             {
                 NativeFunc native = AS_NATIVE(callee);
@@ -145,8 +153,33 @@ callValue(Value callee, int argCount)
     return false;
 }
 
+/// @brief check if method called is defined in the given class(belonging to the instance it was called from), if
+///        so, place bound method on top of the stack.
+/// @param klass class of the instance where this method was accessed from.
+/// @param name Name of the method called.
+/// @return true if the method name was found inside class's methods hashtable and was added onto the stack.
+static bool
+bindMethod(ObjClass *klass, ObjString *name)
+{
+    Value method;
+    if (!tableGet(&klass->methods, name, &method)) {
+        // methods are looked up from the instance as a last resort. If the property is not even a method, we
+        // return a runtime error.
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    // create a newBoundMethod object. top of the stack here is the instance object where this method was accessed
+    // from. push the bound method to the stack top.
+    Value instance = peek(0);
+    ObjBoundMethod *bound = newBoundMethod(instance, AS_CLOSURE(method));
+    pop();                  // pop the instance.
+    push(OBJ_VAL(bound));   // push the bound object.
+    return true;
+}
+
 /// @brief generate upvalue for the given value on the stack so closures accessing these stack values are able to
-///        access them even when the stack values have been removed when the function that define them have returned after
+///        access them even when the stack values have been removed when the function that define them has returned after
 ///        execution.
 /// @param local pointer to a value that is currently there on the call stack.
 /// @return return the pointer to the upvalue.
@@ -181,8 +214,8 @@ captureUpvalue(Value *local)
     return createdUpvalue;
 }
 
-/// @brief hoist the value on the stack slot and additionally close all upvalue that are referencing to stack slots
-///        above the provided one.
+/// @brief hoist the value on the stack slot to the heap(close the upvalue) and additionally close all upvalue that
+///        are referencing to stack slots above the provided one.
 /// @param last pointer to the stack slot that the upvalue refers to
 static void
 closeUpvalues(Value *last)
@@ -193,9 +226,9 @@ closeUpvalues(Value *last)
            vm.openUpvalues->location >= last)
     {
         ObjUpvalue *upvalue = vm.openUpvalues;
-        upvalue->closed = *upvalue->location; // copy the stack value into the heap memory where the upvalue is stored.
-        upvalue->location = &upvalue->closed; // update the location of the value it is referring to to point to its 'closed' variable.
-        vm.openUpvalues = upvalue->next; // move the head of the openValues list to the next one since this one is closed now.
+        upvalue->closed   = *upvalue->location; // copy the stack value into the heap memory where the upvalue is stored.
+        upvalue->location = &upvalue->closed;   // update the location of the value it is referring to to point to its 'closed' variable.
+        vm.openUpvalues   = upvalue->next;      // move the head of the openValues list to the next one since this one is closed now.
     }
 }
 
@@ -365,17 +398,20 @@ run()
                 // GET_GLOBAL/LOCAL on it while parsing which the vm gets and pushes the instance on to the stack
                 // prior to getting here.
                 ObjInstance *instance = AS_INSTANCE(peek(0));
-                // name of the property
+                // name of the property i.e. c in b.c
                 ObjString *name = READ_STRING();
-                // get the value of the property in the fields hashtable keyed by it's name.
+                // get the value for the property in the fields hashtable keyed by it's name.
                 Value value;
                 if (tableGet(&instance->fields, name, &value)) {
-                    pop(); // Instance
+                    pop(); // pop instance
                     push(value);
                 } else {
-                    runtimeError("instance of type '%s' does not have property '%s'",
-                                 instance->klass->name->chars, name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
+                    // we can also get a property for the instance which is a method.
+                    if (!bindMethod(instance->klass, name)) {
+                        runtimeError("instance of type '%s' does not have property '%s'", instance->klass->name->chars,
+                                    name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
             } break;
 

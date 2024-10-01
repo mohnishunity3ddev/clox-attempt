@@ -12,3 +12,33 @@
 // OP_CLOSURE              |   | class c | | func m2 |
 // OP_METHOD               |   | class c |                 func m2 gets popped
 // OP_POP                  |   | null |
+
+
+
+// example 2
+// class Person {
+//   sayName() {
+//     // this gets bound to the instance the method was accessed from.
+//     print this.name;
+//   }
+// }
+//
+// var jane = Person();
+// jane.name = "Jane";
+//
+// // two ways to call a class method.
+// jane.sayName();
+// var closure = jane.sayName;
+// // used as a closure
+// closure();
+
+// ex 3
+// can declare, access and invoke instance methods.
+class Scone {
+    topping(first, second) {
+        print "Scone with " + first + " and " + second;
+    }
+}
+
+var scone = Scone();
+scone.topping("berries", "cream");

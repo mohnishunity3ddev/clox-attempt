@@ -14,6 +14,7 @@
 #define IS_NATIVE(value)  isObjType(value, OBJ_NATIVE)
 #define IS_CLASS(value)  isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)  isObjType(value, OBJ_INSTANCE)
+#define IS_BOUND_METHOD(value)  isObjType(value, OBJ_BOUND_METHOD)
 
 #define AS_STRING(value)  ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
@@ -22,8 +23,10 @@
 #define AS_NATIVE(value) (((ObjNative *) AS_OBJ(value))->function)
 #define AS_CLASS(value) ((ObjClass *)AS_OBJ(value))
 #define AS_INSTANCE(value) ((ObjInstance *)AS_OBJ(value))
+#define AS_BOUND_METHOD(value) ((ObjBoundMethod *)AS_OBJ(value))
 
 typedef enum {
+    OBJ_BOUND_METHOD,
     OBJ_INSTANCE,
     OBJ_CLASS,
     OBJ_UPVALUE,
@@ -155,6 +158,16 @@ typedef struct {
     Table fields;
 } ObjInstance;
 
+/// @brief encapsulates a method invocation bound to its class instance. Tracks the instance the method was
+///        accessed from. Can be called later like a function.
+typedef struct {
+    Obj obj;
+    /// @brief ObjInstance representing the instance the method was accessed from.
+    Value receiver;
+    /// @brief Closure object representing the method function.
+    ObjClosure *method;
+} ObjBoundMethod;
+
 // ------------------------------------------------------------------------------------------------------------------
 // NOTE: Native functions that are resolved at runtime and directly call some native function that we get and
 // execute directly in C in VM. For example - sqrtf, atan2, clock etc.
@@ -175,6 +188,12 @@ isObjType(Value value, ObjType type)
 // ------------------------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------------------------
+
+/// @brief creates a bound method object encapsulating a method with its instance where it was accessed from.
+/// @param receiver The object instance where this method closure was accessed from.
+/// @param method pointer to the closure object representing the individual method.
+/// @return pointer to the new boundMethod object.
+ObjBoundMethod *newBoundMethod(Value receiver, ObjClosure *method);
 
 /// @brief creates a new instance object.
 /// @param klass the class this is an instance of
