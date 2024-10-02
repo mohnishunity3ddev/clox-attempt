@@ -75,6 +75,8 @@ typedef enum
     OP_RETURN,
     /// @brief instruction to create a new class object at runtime.
     OP_CLASS,
+    /// @brief instruction for inheritance. it's expected for subclass to be on top of stack, the superclass below it.
+    OP_INHERIT,
     /// @brief instruction to create a new method for a class.
     OP_METHOD,
     /// @brief instruction to invoke a method call on an instance.

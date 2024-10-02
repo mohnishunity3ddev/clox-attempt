@@ -182,7 +182,16 @@ identifierType()
     {
         case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
         case 'c': return checkKeyword(1, 4, "lass", TOKEN_CLASS);
-        case 'e': return checkKeyword(1, 3, "lse", TOKEN_ELSE);
+        case 'e':
+        {
+            int len = scanner.current - scanner.start;
+            if (len > 1) {
+                switch(scanner.start[1]) {
+                    case 'l': return checkKeyword(1, 2, "se", TOKEN_ELSE);
+                    case 'x': return checkKeyword(1, 5, "tends", TOKEN_INHERITANCE);
+                }
+            }
+        } break;
         case 'f':
         {
             // NOTE: if the iden. starts with f, it can be many things.
@@ -198,7 +207,16 @@ identifierType()
                 }
             }
         } break;
-        case 'i': return checkKeyword(1, 1, "f", TOKEN_IF);
+        case 'i':
+        {
+            int len = scanner.current - scanner.start;
+            if (len > 1) {
+                switch(scanner.start[1]) {
+                    case 'f' : return checkKeyword(2, 1, "f", TOKEN_IF);
+                    case 'm' : return checkKeyword(2, 8, "plements", TOKEN_INHERITANCE);
+                }
+            }
+        } break;
         case 'l': return checkKeyword(1, 3, "oop", TOKEN_FOR);
         case 'n': return checkKeyword(1, 2, "il", TOKEN_NIL);
         case 'o': return checkKeyword(1, 1, "r", TOKEN_OR);
@@ -208,10 +226,8 @@ identifierType()
         case 't':
         {
             int length = scanner.current - scanner.start;
-            if (length > 1)
-            {
-                switch(scanner.start[1])
-                {
+            if (length > 1) {
+                switch(scanner.start[1]) {
                     case 'h': return checkKeyword(2, 2, "is", TOKEN_THIS);
                     case 'r': return checkKeyword(2, 2, "ue", TOKEN_TRUE);
                 }

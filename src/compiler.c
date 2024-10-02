@@ -856,7 +856,8 @@ namedVariable(Token name, bool canAssign)
     }
 }
 
-/// @brief Compiles a variable expression
+/// @brief Compiles a variable expression. emits code  OP_GET/SET_LOCAL/GLOBAL/UPVALUE to load a variable with the
+///        given name onto the VM stack.
 /// @param canAssign true if the expression can be assigned to
 static void
 variable(bool canAssign)
@@ -964,6 +965,22 @@ classDeclaration()
     ClassCompiler classCompiler;
     classCompiler.enclosing = currentClass;
     currentClass = &classCompiler;
+
+    // does this class inherit another class.
+    if (match(TOKEN_LESS) || match(TOKEN_INHERITANCE)) {
+        // consume the identifier meant for the super class name, equals parser.previous
+        consume(TOKEN_IDENTIFIER, "Expected a superclass name");
+        // push the super class onto the stack.
+        variable(false);
+        // subclass and superclass names cannot be the same.
+        if (identifiersEqual(&className, &parser.previous)) {
+            error("A class cannot inherit itself");
+        }
+        // push the subclass (which is inheriting) onto the stack.
+        namedVariable(className, false);
+        // emit the Inherit function.
+        emitByte(OP_INHERIT);
+    }
 
     namedVariable(className, false);     // push class on stack. useful for binding the methods after this.
     consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");

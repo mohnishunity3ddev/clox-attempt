@@ -140,6 +140,7 @@ disassembleInstruction(Chunk *chunk, int offset)
 
         case OP_CLASS:          { result = constantInstruction("OP_CLASS", chunk, offset); }             break;
         case OP_METHOD:         { result = constantInstruction("OP_METHOD", chunk, offset); }            break;
+        case OP_INHERIT:        { result = simpleInstruction("OP_METHOD", offset); }                     break;
 
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;

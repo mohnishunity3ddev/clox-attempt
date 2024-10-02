@@ -637,6 +637,23 @@ run()
             } break;
 
             // -----------------------------------------------------------------------------------
+            case OP_INHERIT:
+            {
+                Value superclass = peek(1);
+                // superclass has to be a class.
+                if (!IS_CLASS(superclass)) {
+                    runtimeError("Superclass must be a class");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjClass *subclass = AS_CLASS(peek(0));
+                // copy all superclass's methods into the subclass's methods table. At this point, we haven't
+                // looked at the subclass's methods in the compiler. so methods with the same name don't get
+                // overwritten by this addition.
+                tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
+                pop(); // pop subclass.
+            } break;
+
+            // -----------------------------------------------------------------------------------
             case OP_METHOD:
             {
                 // read the method name from the constant table.
