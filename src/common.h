@@ -16,7 +16,7 @@
 #define DEBUG_STRESS_GC
 #undef DEBUG_STRESS_GC
 #define DEBUG_LOG_GC
-#undef DEBUG_LOG_GC
+// #undef DEBUG_LOG_GC
 
 typedef uint8_t u8;
 typedef uint16_t u16;

@@ -127,6 +127,7 @@ static void dot(bool canAssign);
 static void statement();
 static void declaration();
 static void this_(bool canAssign);
+static void super_(bool canAssign);
 
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
@@ -163,7 +164,7 @@ ParseRule rules[] = {
   [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {super_,   NULL,   PREC_NONE},
   [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
@@ -873,6 +874,41 @@ syntheticToken(const char *text)
     token.start = text;
     token.length = (int)strlen(text);
     return token;
+}
+
+/// @brief generate code for the VM to access a superclass method on the current instance where the "super" was
+/// accessed.
+/// @param canAssign unused here.
+static void
+super_(bool canAssign)
+{
+    if (currentClass == NULL) {
+        error("Can't use 'super' outside of a class");
+    } else if (!currentClass->hasSuperClass){
+        error("Can't use 'super' in a class which does not have a superclass");
+    }
+
+    consume(TOKEN_DOT, "Expected '.' after the super keyword");
+    consume(TOKEN_IDENTIFIER, "Expected superclass method name");
+    u8 superclassMethodIndex = identifierConstant(&parser.previous);
+
+    // push the instance stored in the hidden "this" onto the stack. (OP_GET_LOCAL)
+    namedVariable(syntheticToken("this"), false);
+    // we see a '(' immediately after the super's methodName when we want to invoke it.
+    if (match(TOKEN_LEFT_PAREN)) {
+        // push all the arguments onto the stack.
+        u8 argCount = argumentList();
+        // load the superclass onto the stack. (OP_GET_UPVALUE)
+        namedVariable(syntheticToken("super"), false);
+        // fuses the OP_GET_SUPER and OP_CALL into one optimized instruction which does the same thing.
+        emitBytes(OP_SUPER_INVOKE, superclassMethodIndex);
+        emitByte(argCount);
+    } else {
+        // push the superclass of the current class's method onto the stack. superclass is in its "super" variable
+        // (OP_GET_UPVALUE)
+        namedVariable(syntheticToken("super"), false);
+        emitBytes(OP_GET_SUPER, superclassMethodIndex);
+    }
 }
 
 /// @brief compiles the this keyword appearing inside a class method as a prefix op.

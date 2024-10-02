@@ -119,7 +119,6 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_JUMP_IF_FALSE:  { result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); }      break;
         case OP_LOOP:           { result = jumpInstruction("OP_LOOP", -1, chunk, offset); }              break;
         case OP_CALL:           { result = byteInstruction("OP_CALL", chunk, offset); }                  break;
-        case OP_INVOKE:         { result = invokeInstruction("OP_INVOKE", chunk, offset); }              break;
         case OP_CLOSURE:
         {
             offset++;
@@ -137,10 +136,12 @@ disassembleInstruction(Chunk *chunk, int offset)
             }
             result = offset;
         } break;
+        case OP_INVOKE:         { result = invokeInstruction("OP_INVOKE", chunk, offset); }              break;
+        case OP_SUPER_INVOKE:   { result = invokeInstruction("OP_SUPER_INVOKE", chunk, offset); }        break;
 
         case OP_CLASS:          { result = constantInstruction("OP_CLASS", chunk, offset); }             break;
         case OP_METHOD:         { result = constantInstruction("OP_METHOD", chunk, offset); }            break;
-        case OP_INHERIT:        { result = simpleInstruction("OP_METHOD", offset); }                     break;
+        case OP_INHERIT:        { result = simpleInstruction("OP_INHERIT", offset); }                     break;
 
         case OP_CONSTANT:       { result = constantInstruction("OP_CONSTANT", chunk, offset); }          break;
         case OP_CONSTANT_LONG:  { result = constantLongInstruction("OP_CONSTANT_LONG", chunk, offset); } break;
@@ -163,6 +164,7 @@ disassembleInstruction(Chunk *chunk, int offset)
 
         case OP_GET_PROPERTY:   { result = constantInstruction("OP_GET_PROPERTY", chunk, offset); }      break;
         case OP_SET_PROPERTY:   { result = constantInstruction("OP_SET_PROPERTY", chunk, offset); }      break;
+        case OP_GET_SUPER:      { result = constantInstruction("OP_GET_SUPER", chunk, offset); }         break;
 
         case OP_NEGATE:         { result = simpleInstruction("OP_NEGATE", offset); }                     break;
         case OP_NOT:            { result = simpleInstruction("OP_NOT", offset); }                        break;

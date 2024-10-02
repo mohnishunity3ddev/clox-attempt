@@ -75,12 +75,16 @@ typedef enum
     OP_RETURN,
     /// @brief instruction to create a new class object at runtime.
     OP_CLASS,
+    /// @brief instruction when instance uses a property from it's superclass.
+    OP_GET_SUPER,
     /// @brief instruction for inheritance. it's expected for subclass to be on top of stack, the superclass below it.
     OP_INHERIT,
     /// @brief instruction to create a new method for a class.
     OP_METHOD,
     /// @brief instruction to invoke a method call on an instance.
     OP_INVOKE,
+    /// @brief instruction to invoke method in the superclass.
+    OP_SUPER_INVOKE,
 } OpCode;
 
 typedef struct

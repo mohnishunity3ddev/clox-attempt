@@ -176,11 +176,11 @@ callValue(Value callee, int argCount)
 /// @param argCount number of arguments.
 /// @return true if call successful, false, otherwise.
 static bool
-invokeFromClass(ObjClass *klass, ObjString *name, int argCount)
+invokeFromClass(ObjClass *klass, ObjString *methodName, int argCount)
 {
     Value method;
-    if (!tableGet(&klass->methods, name, &method)) {
-        runtimeError("Undefined property '%s'.", name->chars);
+    if (!tableGet(&klass->methods, methodName, &method)) {
+        runtimeError("Undefined property '%s'.", methodName->chars);
         return false;
     }
 
@@ -216,7 +216,8 @@ invoke(ObjString *name, int argCount)
 }
 
 /// @brief check if method called is defined in the given class(belonging to the instance it was called from), if
-///        so, place bound method on top of the stack.
+///        so, place bound method on top of the stack. binds the method's 'closure' object to the stacktop instance
+///        object.
 /// @param klass class of the instance where this method was accessed from.
 /// @param name Name of the method called.
 /// @return true if the method name was found inside class's methods hashtable and was added onto the stack.
@@ -637,6 +638,16 @@ run()
             } break;
 
             // -----------------------------------------------------------------------------------
+            case OP_GET_SUPER:
+            {
+                ObjString *superclassMethodName = READ_STRING();
+                ObjClass *superclass = AS_CLASS(pop());
+                if (!bindMethod(superclass, superclassMethodName)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            } break;
+
+            // -----------------------------------------------------------------------------------
             case OP_INHERIT:
             {
                 Value superclass = peek(1);
@@ -669,6 +680,18 @@ run()
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 // push the new method callFrame on the call Stack.
+                frame = &vm.frames[vm.frameCount - 1];
+            } break;
+
+            // -----------------------------------------------------------------------------------
+            case OP_SUPER_INVOKE:
+            {
+                ObjString *superclassMethodName = READ_STRING();
+                int argCount = READ_BYTE();
+                ObjClass *superclass = AS_CLASS(pop());
+                if (!invokeFromClass(superclass, superclassMethodName, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 frame = &vm.frames[vm.frameCount - 1];
             } break;
 

@@ -1,0 +1,46 @@
+// ex 1
+class Doughnut {
+  cook() {
+    print "Dunk in the fryer.";
+    this.finish("sprinkles");
+  }
+
+  finish(ingredient) {
+    print "Finish with " + ingredient;
+  }
+}
+
+class Cruller implements Doughnut {
+  finish(ingredient) {
+    super.finish(ingredient);
+    super.finish("icing");
+  }
+}
+
+var cruInstance = Cruller();
+cruInstance.finish("random");
+
+var doughnutInstance = Doughnut();
+doughnutInstance.cook();
+print "doughnut::finish";
+doughnutInstance.finish("random doughnut is all you get brother");
+
+// compiler emits the following byte code for parsing super.finish("icing")
+// |____________________________________________________________________________________________________________________________________________________|
+// |Instruction              |              Stack                        |       Comments                                                               |
+// |----------------------------------------------------------------------------------------------------------------------------------------------------|
+// |OP_GET_LOCAL             | | cruller instance |                      | (this) loads the instance onto the stack.                                    |
+// |OP_GET_UPVALUE           | | cruller instance | | doughnut class |   | (super) loads the superclass where the method is resolved.                   |
+// |OP_GET_SUPER             | | func finish |                           | "finish" GET_SUPER encodes the name of the method to access as an operand.   |
+// |OP_CONSTANT              | | func finish | | "icing" |               |                                                                              |
+// |OP_CALL                  | | null |                                  |                                                                              |
+// |----------------------------------------------------------------------------------------------------------------------------------------------------|
+
+// compiler emits the following when using OP_SUPER_INVOKE which is more optimized than the version above.
+// |____________________________________________________________________________________________________________________________________________________|
+// |Instruction              |              Stack                        |       Comments                                                               |
+// |----------------------------------------------------------------------------------------------------------------------------------------------------|
+// | OP_GET_LOCAL            |  |cruller instance|                       | get the local var at slot 0 ('this')
+// | OP_CONSTANT             |  |cruller instance| |"icing"|             | push the "icing" argument onto the stack.
+// | OP_GET_UPVALUE          |  |cruller instance| |"icing"| |doughnut|  | load the superclass onto the stack ('super')
+// | OP_SUPER_INVOKE         |  |cruller instance| |"icing"|             | Doughnut.finish() CallFrame
