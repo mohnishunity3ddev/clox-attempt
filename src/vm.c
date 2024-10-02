@@ -91,6 +91,7 @@ defineNative(const char *name, NativeFunc function)
 static bool
 call(ObjClosure *closure, int argCount)
 {
+    // number of arguments passed should equal the the function's parameter list while defining it.
     if (argCount != closure->function->arity)
     {
         runtimeError("Expected %d arguments but got %d.", closure->function->arity, argCount);
@@ -125,11 +126,22 @@ callValue(Value callee, int argCount)
                 return call(bound->method, argCount);
             } break;
 
-            // create a new instance of a class. ex: class c{} var i = c();
+            // constructor call.
             case OBJ_CLASS:
             {
+                // this is similar to a function call where the 0 slot is the new instance object.
                 ObjClass *klass = AS_CLASS(callee);
                 vm.stack.top[-argCount - 1] = OBJ_VAL(newInstance(klass));
+                // if initString is init. then init's closure gets called. pushes a new callFrame.
+                Value initializer;
+                // look for an init(default constructor method name) method inside the class's method table.
+                if (tableGet(&klass->methods, vm.initString, &initializer)) {
+                    return call(AS_CLOSURE(initializer), argCount);
+                } else if (argCount != 0) {
+                    runtimeError("No explicit initializer defined. Was expecting 0 arguments but got %d.",
+                                 argCount);
+                    return false;
+                }
                 return true;
             } break;
 
@@ -659,6 +671,12 @@ initVM()
     vm.nextGC = 1024 * 1024;
 
     initTable(&vm.strings);
+
+    // defining what the constructor method names should be.
+    vm.initString = NULL; // make sure if the GC runs after the copyString call. it doesn't try to read initString
+                          // ptr before it's initialized.
+    vm.initString = copyString("init", 4);
+
     initTable(&vm.globals);
     defineNative("clock", clockNative);
 }
@@ -685,6 +703,8 @@ freeVM()
 {
     freeTable(&vm.globals);
     freeTable(&vm.strings);
+    // make sure initString memory is unreachable by the GC and frees the memory held here.
+    vm.initString = NULL;
 #if USE_DYNAMIC_STACK
     FREE_ARRAY(Value, vm.stack.values, vm.stack.capacity);
     vm.stack.values = NULL;

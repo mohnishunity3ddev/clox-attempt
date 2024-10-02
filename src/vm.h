@@ -50,20 +50,20 @@ typedef struct
 {
     /// @brief each Callframe represents its own ip and the pointer to the ObjFunction that it's executing.
     CallFrame frames[FRAMES_MAX];
-
     /// @brief Current height of the CallFrame Stack (number of ongoing function calls which haven't finished
     ///        executing yet.)
     int frameCount;
-
+    /// @brief the VM stack
     Stack stack;
-
     /// @brief a hashtable of unique strings (interned strings).
     Table strings;
-
     /// @brief a hashtable with key = names of the global variables and the value they represent.
     Table globals;
-
+    /// @brief head of the linked list of allocated objects at runtime. This is what the GC's mark phase use to
+    ///        traverse the object graph.
     Obj *objects;
+    /// @brief the default constructor method's name.
+    ObjString *initString;
 
     /// @brief head of the list of upvalues sorted based on increasing stack size. Each open upvalue points to the
     ///        next open upvalue that references a local variable farther down the stack. open upvalues are

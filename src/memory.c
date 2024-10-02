@@ -172,6 +172,8 @@ markRoots()
     // take care of the heap allocated global hash table entries.
     markTable(&vm.globals);
     markCompilerRoots();
+    // we don't want GC to clear out the InitString.
+    markObject((Obj *)vm.initString);
 }
 
 /// @brief go through all outgoing references to heap allocations by the provided object and color them 'black',

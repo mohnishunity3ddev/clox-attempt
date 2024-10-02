@@ -75,6 +75,8 @@ typedef enum {
     TYPE_FUNCTION_USER_DEFINED,
     /// @brief a method inside a class.
     TYPE_METHOD,
+    /// @brief an initializer method inside a class.
+    TYPE_INITIALIZER,
     /// @brief The main function of the program
     TYPE_FUNCTION_MAIN,
 } FunctionType;
@@ -97,9 +99,10 @@ struct Compiler {
     int scopeDepth;
 };
 
-typedef struct {
-    struct ClassCompiler *enclosing;
-} ClassCompiler;
+typedef struct ClassCompiler ClassCompiler;
+struct ClassCompiler {
+    ClassCompiler *enclosing;
+};
 
 Parser parser;
 Chunk *compilingChunk;
@@ -122,6 +125,7 @@ static void call(bool canAssign);
 static void dot(bool canAssign);
 static void statement();
 static void declaration();
+static void this_(bool canAssign);
 
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
@@ -298,7 +302,13 @@ emitJump(u8 instruction)
 static void
 emitReturn()
 {
-    emitByte(OP_NIL);
+    if (current->type == TYPE_INITIALIZER) {
+        // load slot zero of the method which contains the instance in case of a class method.
+        emitBytes(OP_GET_LOCAL, 0);
+    } else {
+        emitByte(OP_NIL);
+    }
+
     emitByte(OP_RETURN);
 }
 
@@ -917,6 +927,12 @@ method()
     u8 methodNameIndex = identifierConstant(&parser.previous);
     // parse method body
     FunctionType type = TYPE_METHOD;
+    // Initializer method.
+    if (parser.previous.length == 4 &&
+        memcmp(parser.previous.start, "init", 4) == 0)
+    {
+        type = TYPE_INITIALIZER;
+    }
     function(type);
     // which class these methods have to bind to. function closure is top of stack at this point(due to function())
     // abovc. class value under it.
@@ -1070,6 +1086,10 @@ returnStatement()
     if (match(TOKEN_SEMICOLON)) {
         emitReturn();
     } else  {
+        if (current->type == TYPE_INITIALIZER) {
+            error("Cannot return a value from an initializer");
+        }
+
         expression();
         consume(TOKEN_SEMICOLON, "Expected a ';' after the return statement");
         emitByte(OP_RETURN);
