@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceRoot}/bin/src/clox.exe",
-            "args": ["superclasses.ayu"],
+            "args": ["benchmarks_01.ayu"],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}/assets",
             "environment": [],

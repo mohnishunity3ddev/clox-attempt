@@ -25,7 +25,10 @@ freeTable(Table *table)
 static Entry *
 findEntry(Entry *entries, int capacity, ObjString *key)
 {
-    u32 index = key->hash % capacity;
+    // u32 index = key->hash % capacity;
+    // NOTE: This gives the same modulo result as above since we know capacity is always a power of 2.
+    u32 index = key->hash & (capacity - 1);
+
     // we have tombstones since we don't want to break probe sequence chains (which will make getting to some
     // entries unreachable while deleting). We can also use tombstones to act as entries which can be filled.
     // deleted entries become tombstones instead of being completely deleted since that can break probe sequence
@@ -55,7 +58,9 @@ findEntry(Entry *entries, int capacity, ObjString *key)
             return entry;
         }
 
-        index = (index + 1) % capacity;
+        // index = (index + 1) % capacity;
+        // capacity is a power of 2; so this bit hack to get mod result works.
+        index = (index + 1) & (capacity - 1);
     }
 }
 
@@ -167,7 +172,8 @@ tableFindString(Table *table, const char *chars, int length, u32 hash)
     if (table->count == 0)
         return NULL;
 
-    u32 index = hash % table->capacity;
+    // u32 index = hash % table->capacity;
+    u32 index = hash & (table->capacity - 1);
     for (;;)
     {
         Entry *entry = &table->entries[index];
@@ -183,7 +189,8 @@ tableFindString(Table *table, const char *chars, int length, u32 hash)
             return entry->key;
         }
 
-        index = (index + 1) % table->capacity;
+        // index = (index + 1) % table->capacity;
+        index = (index + 1) & (table->capacity - 1);
     }
 }
 

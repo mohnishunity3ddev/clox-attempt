@@ -63,5 +63,4 @@ void tableRemoveWhite(Table *table);
 /// @brief mark all entries in the hashtable table
 /// @param table the table we want the GC for marking reachable objects.
 void markTable(Table *table);
-
 #endif
