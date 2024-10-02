@@ -102,6 +102,7 @@ struct Compiler {
 typedef struct ClassCompiler ClassCompiler;
 struct ClassCompiler {
     ClassCompiler *enclosing;
+    bool hasSuperClass;
 };
 
 Parser parser;
@@ -865,6 +866,15 @@ variable(bool canAssign)
     namedVariable(parser.previous, canAssign);
 }
 
+static Token
+syntheticToken(const char *text)
+{
+    Token token;
+    token.start = text;
+    token.length = (int)strlen(text);
+    return token;
+}
+
 /// @brief compiles the this keyword appearing inside a class method as a prefix op.
 /// @param canAssign unused here.
 static void
@@ -964,6 +974,7 @@ classDeclaration()
     // back link to current class. Support for nested classes.
     ClassCompiler classCompiler;
     classCompiler.enclosing = currentClass;
+    classCompiler.hasSuperClass = false;
     currentClass = &classCompiler;
 
     // does this class inherit another class.
@@ -976,10 +987,21 @@ classDeclaration()
         if (identifiersEqual(&className, &parser.previous)) {
             error("A class cannot inherit itself");
         }
+        // add a local variable "super" in the subclass in it's own scope.
+        // Ensures that if we declare two classes in the same scope, each has a different local slot to store its superclass
+        // these 3 lines of code gives access to the superclass object from within the subclass's methods.
+        ///
+        // NOTE: the access is given by a variable called "super" which is a local outside of the method body, our
+        // existing upvalue support enables the VM to capture that "super" local inside the body of a method
+        // or even in functions nested inside that method.
+        beginScope();
+        addLocal(syntheticToken("super"));
+        defineVariable(0);
         // push the subclass (which is inheriting) onto the stack.
         namedVariable(className, false);
         // emit the Inherit function.
         emitByte(OP_INHERIT);
+        currentClass->hasSuperClass = true;
     }
 
     namedVariable(className, false);     // push class on stack. useful for binding the methods after this.
@@ -991,6 +1013,9 @@ classDeclaration()
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
     // parsed all methods, don't need the class. pop it off.
     emitByte(OP_POP);
+    if (classCompiler.hasSuperClass) {
+        endScope();
+    }
 
     // get back to the enclosing class. when outermost class body ends, enclosing will be NULL.
     currentClass = currentClass->enclosing;
