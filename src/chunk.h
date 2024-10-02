@@ -77,6 +77,8 @@ typedef enum
     OP_CLASS,
     /// @brief instruction to create a new method for a class.
     OP_METHOD,
+    /// @brief instruction to invoke a method call on an instance.
+    OP_INVOKE,
 } OpCode;
 
 typedef struct

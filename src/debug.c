@@ -77,6 +77,17 @@ jumpInstruction(const char *name, int sign, Chunk *chunk, int offset)
     return offset + 3;
 }
 
+static int
+invokeInstruction(const char *name, Chunk *chunk, int offset)
+{
+    u8 constant = chunk->code[offset + 1];
+    u8 argCount = chunk->code[offset + 2];
+    printf("%-16s (%d args) %4d '", name, argCount, constant);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    return offset + 3;
+}
+
 void
 disassembleChunk(Chunk *chunk, const char *name)
 {
@@ -108,6 +119,7 @@ disassembleInstruction(Chunk *chunk, int offset)
         case OP_JUMP_IF_FALSE:  { result = jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset); }      break;
         case OP_LOOP:           { result = jumpInstruction("OP_LOOP", -1, chunk, offset); }              break;
         case OP_CALL:           { result = byteInstruction("OP_CALL", chunk, offset); }                  break;
+        case OP_INVOKE:         { result = invokeInstruction("OP_INVOKE", chunk, offset); }              break;
         case OP_CLOSURE:
         {
             offset++;

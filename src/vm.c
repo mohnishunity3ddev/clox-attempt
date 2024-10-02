@@ -170,6 +170,51 @@ callValue(Value callee, int argCount)
     return false;
 }
 
+/// @brief helper function for method invocation.
+/// @param klass The class the instance belongs to where the method is being called from.
+/// @param name Name of the method being called.
+/// @param argCount number of arguments.
+/// @return true if call successful, false, otherwise.
+static bool
+invokeFromClass(ObjClass *klass, ObjString *name, int argCount)
+{
+    Value method;
+    if (!tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    return call(AS_CLOSURE(method), argCount);
+}
+
+/// @brief invoke a method on an instance
+/// @param name name of the method
+/// @param argCount number of arguments passed in
+/// @return true if call successful, false otherwise.
+static bool
+invoke(ObjString *name, int argCount)
+{
+    Value receiver = peek(argCount);
+    if (!IS_INSTANCE(receiver)) {
+        runtimeError("Only instances have methods");
+        return false;
+    }
+
+    ObjInstance *instance = AS_INSTANCE(receiver);
+
+    Value value;
+    // we could be invoking a closure function stored inside a class field. This was how the OP_GET_PROPERTY field
+    // was working before.
+    if (tableGet(&instance->fields, name, &value)) {
+        vm.stack.top[-argCount - 1] = value;
+        return callValue(value, argCount);
+    }
+
+    bool result = invokeFromClass(instance->klass, name, argCount);
+
+    return result;
+}
+
 /// @brief check if method called is defined in the given class(belonging to the instance it was called from), if
 ///        so, place bound method on top of the stack.
 /// @param klass class of the instance where this method was accessed from.
@@ -591,10 +636,23 @@ run()
                 push(klassValue);
             } break;
 
+            // -----------------------------------------------------------------------------------
             case OP_METHOD:
             {
                 // read the method name from the constant table.
                 defineMethod(READ_STRING());
+            } break;
+
+            // -----------------------------------------------------------------------------------
+            case OP_INVOKE:
+            {
+                ObjString *method = READ_STRING();
+                int argCount = READ_BYTE();
+                if (!invoke(method, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                // push the new method callFrame on the call Stack.
+                frame = &vm.frames[vm.frameCount - 1];
             } break;
 
             // -----------------------------------------------------------------------------------

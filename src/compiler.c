@@ -696,7 +696,7 @@ binary(bool canAssign)
         case TOKEN_MINUS:           { emitByte(OP_SUBTRACT); }      break;
         case TOKEN_STAR:            { emitByte(OP_MULTIPLY); }      break;
         case TOKEN_SLASH:           { emitByte(OP_DIVIDE);   }      break;
-        case TOKEN_PERCENTAGE:      { emitByte(OP_MOD);   }      break;
+        case TOKEN_PERCENTAGE:      { emitByte(OP_MOD);   }         break;
         default: return;
     }
 }
@@ -723,6 +723,13 @@ dot(bool canAssign)
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
         emitBytes(OP_SET_PROPERTY, fieldNameIndex);
+    } else
+    // saw a property and a left paren after that, means this is a method call.
+    // fuses the slow, OP_GET_PROPERTY and OP_CALL path into one instruction - more optimized.
+    if (match(TOKEN_LEFT_PAREN)) {
+        u8 argCount = argumentList();
+        emitBytes(OP_INVOKE, fieldNameIndex);
+        emitByte(argCount);
     } else {
         emitBytes(OP_GET_PROPERTY, fieldNameIndex);
     }

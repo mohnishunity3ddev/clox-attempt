@@ -12,9 +12,7 @@
 // OP_CLOSURE              |   | class c | | func m2 |
 // OP_METHOD               |   | class c |                 func m2 gets popped
 // OP_POP                  |   | null |
-
-
-
+// ---------------------------------------------------------------------------------------------------
 // example 2
 // class Person {
 //   sayName() {
@@ -31,7 +29,7 @@
 // var closure = jane.sayName;
 // // used as a closure
 // closure();
-
+// ---------------------------------------------------------------------------------------------------
 // ex 3
 // can declare, access and invoke instance methods.
 // class Scone {
@@ -42,20 +40,34 @@
 //
 // var scone = Scone();
 // scone.topping("berries", "cream");
-
+// ---------------------------------------------------------------------------------------------------
 // ex 4
-class CoffeeMaker {
-  init(coffee) {
-    this.coffee = coffee;
-  }
+// class CoffeeMaker {
+//   init(coffee) {
+//     this.coffee = coffee;
+//   }
+//
+//   brew() {
+//     print "Enjoy your cup of " + this.coffee;
+//
+//     // No reusing the grounds!
+//     this.coffee = nil;
+//   }
+// }
+//
+// var maker = CoffeeMaker("brewmaster nescafe coffee");
+// maker.brew();
+// ---------------------------------------------------------------------------------------------------
+// ex 5
+class Oops {
+  init() {
+    fun f() {
+      print "not a method";
+    }
 
-  brew() {
-    print "Enjoy your cup of " + this.coffee;
-
-    // No reusing the grounds!
-    this.coffee = nil;
+    this.field = f;
   }
 }
 
-var maker = CoffeeMaker("brewmaster nescafe coffee");
-maker.brew();
+var oops = Oops();
+oops.field();
