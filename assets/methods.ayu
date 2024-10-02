@@ -34,11 +34,11 @@
 
 // ex 3
 // can declare, access and invoke instance methods.
-class Scone {
-    topping(first, second) {
-        print "Scone with " + first + " and " + second;
-    }
-}
-
-var scone = Scone();
-scone.topping("berries", "cream");
+// class Scone {
+//     topping(first, second) {
+//         print "Scone with " + first + " and " + second;
+//     }
+// }
+//
+// var scone = Scone();
+// scone.topping("berries", "cream");

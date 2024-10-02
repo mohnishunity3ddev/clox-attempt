@@ -116,7 +116,12 @@ callValue(Value callee, int argCount)
             // call a bound method of a class instance.
             case OBJ_BOUND_METHOD:
             {
+                // OP_CALL on a class field(method) - instance.method(args) '.' calls compiler.dot(), which emits
+                // GET_PROPERTY, which calls bindMethod() which stores BoundMethod object on the stack that we get here.
                 ObjBoundMethod *bound = AS_BOUND_METHOD(callee);
+                // default 0 slot for a function call(first byte of a new CallFrame stack code chunk) stores the
+                // instance this method was accessed from. otherwise its empty by default.
+                vm.stack.top[-argCount - 1] = bound->instanceOwner;
                 return call(bound->method, argCount);
             } break;
 
@@ -406,7 +411,7 @@ run()
                     pop(); // pop instance
                     push(value);
                 } else {
-                    // we can also get a property for the instance which is a method.
+                    // is this a method property?
                     if (!bindMethod(instance->klass, name)) {
                         runtimeError("instance of type '%s' does not have property '%s'", instance->klass->name->chars,
                                     name->chars);

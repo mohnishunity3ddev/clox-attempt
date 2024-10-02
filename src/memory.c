@@ -197,7 +197,7 @@ blackenObject(Obj *object)
         case OBJ_BOUND_METHOD:
         {
             ObjBoundMethod *bound = (ObjBoundMethod *)object;
-            markValue(bound->receiver);
+            markValue(bound->instanceOwner);
             markObject((Obj *)bound->method);
         } break;
 

@@ -73,6 +73,8 @@ typedef struct {
 typedef enum {
     /// @brief User-defined function
     TYPE_FUNCTION_USER_DEFINED,
+    /// @brief a method inside a class.
+    TYPE_METHOD,
     /// @brief The main function of the program
     TYPE_FUNCTION_MAIN,
 } FunctionType;
@@ -95,10 +97,16 @@ struct Compiler {
     int scopeDepth;
 };
 
+typedef struct {
+    struct ClassCompiler *enclosing;
+} ClassCompiler;
+
 Parser parser;
 Chunk *compilingChunk;
 Chunk *mainFunctionChunk;
 Compiler *current = NULL;
+// points to the inner most class being compiled.
+ClassCompiler *currentClass = NULL;
 
 static void binary(bool canAssign);
 static void grouping(bool canAssign);
@@ -151,7 +159,7 @@ ParseRule rules[] = {
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
@@ -340,7 +348,6 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     compiler->scopeDepth = 0;
     compiler->function = newFunction();
     current = compiler;
-
     if (funcType != TYPE_FUNCTION_MAIN) {
         current->function->name = copyString(parser.previous.start, parser.previous.length);
     }
@@ -349,6 +356,19 @@ initCompiler(Compiler *compiler, FunctionType funcType)
     local->name.start = "";
     local->name.length = 0;
     local->isCaptured = false;
+
+    // slot zero in function localslist is left out by default to represent the start of the function.
+    // this is used when parsing 'this' keyword, it can be parsed as a local variable looked up as a local variable.
+    // this is the frame slot where we receive the receiver(the object 'this' is referring to).]
+    // we only want to do this for methods.
+    if (funcType != TYPE_FUNCTION_USER_DEFINED) {
+        local->name.start = "this";
+        local->name.length = 4;
+    } else { // normal functions won't have a 'this', only class methods can use 'this'
+        local->name.start = "";
+        local->name.length = 0;
+    }
+
 }
 
 /// @brief Finalizes the current function compilation
@@ -688,7 +708,7 @@ dot(bool canAssign)
     consume(TOKEN_IDENTIFIER, "Expect a property name after '.'");
     // put the field/property string into the constants array and return the index where it got put.
     u8 fieldNameIndex = identifierConstant(&parser.previous);
-    
+
     // a + b.c = 3 should be error.
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
@@ -827,6 +847,19 @@ variable(bool canAssign)
     namedVariable(parser.previous, canAssign);
 }
 
+/// @brief compiles the this keyword appearing inside a class method as a prefix op.
+/// @param canAssign unused here.
+static void
+this_(bool canAssign)
+{
+    if (currentClass == NULL) {
+        error("Cannot use 'this' outside a class declaration");
+        return;
+    }
+
+    variable(false);
+}
+
 /// @brief Compiles any expression
 static void
 expression()
@@ -883,7 +916,7 @@ method()
     // parse method name
     u8 methodNameIndex = identifierConstant(&parser.previous);
     // parse method body
-    FunctionType type = TYPE_FUNCTION_USER_DEFINED;
+    FunctionType type = TYPE_METHOD;
     function(type);
     // which class these methods have to bind to. function closure is top of stack at this point(due to function())
     // abovc. class value under it.
@@ -904,6 +937,11 @@ classDeclaration()
     emitBytes(OP_CLASS, classNameIndex); // pushes the class value on stack
     defineVariable(classNameIndex);      // pops the class from the stack(OP_DEFINE_GLOBAL)
 
+    // back link to current class. Support for nested classes.
+    ClassCompiler classCompiler;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
+
     namedVariable(className, false);     // push class on stack. useful for binding the methods after this.
     consume(TOKEN_LEFT_BRACE, "Expected '{' before class body");
     // parse all class methods.
@@ -913,6 +951,9 @@ classDeclaration()
     consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body");
     // parsed all methods, don't need the class. pop it off.
     emitByte(OP_POP);
+
+    // get back to the enclosing class. when outermost class body ends, enclosing will be NULL.
+    currentClass = currentClass->enclosing;
 }
 
 /// @brief Compiles a function declaration statement

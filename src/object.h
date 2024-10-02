@@ -163,7 +163,7 @@ typedef struct {
 typedef struct {
     Obj obj;
     /// @brief ObjInstance representing the instance the method was accessed from.
-    Value receiver;
+    Value instanceOwner;
     /// @brief Closure object representing the method function.
     ObjClosure *method;
 } ObjBoundMethod;

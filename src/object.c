@@ -62,7 +62,7 @@ ObjBoundMethod *
 newBoundMethod(Value receiver, ObjClosure *method)
 {
     ObjBoundMethod *bound = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD);
-    bound->receiver = receiver;
+    bound->instanceOwner = receiver;
     bound->method = method;
     return bound;
 }
